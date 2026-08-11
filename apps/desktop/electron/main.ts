@@ -209,7 +209,7 @@ function emitRunEvent(runId: string, event: string, data?: unknown, level = "inf
   } catch (error) {
     console.error("Failed to record run event", error);
   }
-  mainWindow?.webContents.send("run:events", { runId, event, data, level, ts: new Date().toISOString() });
+  notifyRenderer("run:events", { runId, event, data, level, ts: new Date().toISOString() });
 }
 
 /**
@@ -552,8 +552,30 @@ function writeState(next: DesktopState) {
   writeFileSync(statePath, JSON.stringify(next, null, 2), "utf8");
 }
 
+/**
+ * Sends to the window, if there is a window able to receive it.
+ *
+ * Runs keep executing after the window closes -- the app deliberately stays
+ * alive on macOS -- so every run update fires into a renderer that may be gone.
+ * The optional chain on mainWindow is not enough: a window mid-teardown is
+ * non-null with a disposed render frame, and sending to it throws
+ * "Render frame was disposed before WebFrameMain could be accessed" from inside
+ * a WebContents event handler, where nothing is there to catch it.
+ */
+function notifyRenderer(channel: string, payload: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const contents = mainWindow.webContents;
+  if (contents.isDestroyed()) return;
+  try {
+    contents.send(channel, payload);
+  } catch {
+    // The window went away between the check and the send. Nothing to do: the
+    // state is already on disk and the renderer reads it on next launch.
+  }
+}
+
 function emitRunsUpdated() {
-  mainWindow?.webContents.send("runs:updated", readState().runs);
+  notifyRenderer("runs:updated", readState().runs);
 }
 
 function writeRuns(runs: QueueEntry[]) {
@@ -1035,7 +1057,7 @@ function emitRunCompleted(run: QueueEntry) {
     message
   };
 
-  mainWindow?.webContents.send("run:completed", payload);
+  notifyRenderer("run:completed", payload);
   if (Notification.isSupported()) {
     const notification = new Notification({
       title: applied ? "Application submitted" : run.status === "blocked_auth" ? "Authentication required" : run.status === "cancelled" ? "Run cancelled" : run.status === "failed" ? "Application failed" : "Run finished",
@@ -1670,7 +1692,7 @@ app.whenReady().then(() => {
     void syncJobFeed(db())
       .then((result) => {
         console.log(`job feed sync (${reason}):`, result.counts.total, "jobs");
-        mainWindow?.webContents.send("jobs:updated", result);
+        notifyRenderer("jobs:updated", result);
       })
       .catch((error) => console.error(`job feed sync failed (${reason})`, error));
   };
@@ -1690,7 +1712,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("jobs:sync", async (_event, force?: boolean) => {
     const result = await syncJobFeed(db(), { force: Boolean(force) });
-    mainWindow?.webContents.send("jobs:updated", result);
+    notifyRenderer("jobs:updated", result);
     return result;
   });
   ipcMain.handle("jobs:status", () => feedStatus(db()));

@@ -1,208 +1,169 @@
-/* Automa landing page.
-   Follows the app's own design language: Midnight Ink rather than black, sharp
-   corners, restrained pastel atmosphere, no glow, no gradient text. */
+/*
+ * The download page.
+ *
+ * Text-first on purpose: this page exists to hand over a DMG and explain the
+ * one Gatekeeper step that follows. No web fonts, no scripts, no external
+ * requests of any kind -- the same promise the app itself makes.
+ */
 
 :root {
-  --ink: #0b1020;
-  --text: #171a24;
-  --muted: rgba(23, 26, 36, 0.62);
-  --canvas: #fcfbf8;
-  --surface: #ffffff;
-  --border: rgba(11, 16, 32, 0.08);
-  --border-strong: rgba(11, 16, 32, 0.16);
-  --violet: #bdbbff;
-  --coral: #e97b63;
-  --mist: #dbe7ff;
-  --pink: #f3d9ef;
+  --ink: #14161a;
+  --muted: #5c626e;
+  --line: #e2e4e9;
+  --paper: #fdfdfc;
+  --accent: #14161a;
 }
 
-* { box-sizing: border-box; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ecedf0;
+    --muted: #9aa0ac;
+    --line: #2b2e35;
+    --paper: #131519;
+    --accent: #ecedf0;
+  }
+}
 
-html { -webkit-text-size-adjust: 100%; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
-  background: var(--canvas);
-  color: var(--text);
-  font-family: "Satoshi", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
 }
 
-.wrap { width: 100%; max-width: 62rem; margin: 0 auto; padding: 0 24px; }
-
-a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-a:hover { color: var(--ink); }
-
-code {
-  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9em;
-  background: rgba(11, 16, 32, 0.04);
-  border: 1px solid var(--border);
-  padding: 1px 5px;
-  word-break: break-all;
-}
-
-/* ---- hero ---- */
-
-.hero {
-  position: relative;
-  padding: 84px 0 64px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--border);
-}
-
-.hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(56rem 28rem at 8% -20%, rgba(243, 217, 239, 0.6), transparent 62%),
-    radial-gradient(50rem 26rem at 92% -10%, rgba(189, 187, 255, 0.5), transparent 64%),
-    radial-gradient(44rem 24rem at 50% 118%, rgba(219, 231, 255, 0.55), transparent 62%);
-}
-
-.hero .wrap { position: relative; }
-
-.eyebrow {
-  display: inline-block;
-  font-family: "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 14px;
+.wrap {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 4rem 1.25rem 5rem;
 }
 
 h1 {
-  font-size: clamp(32px, 5.2vw, 46px);
-  font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: -0.9px;
-  margin: 0 0 16px;
-  max-width: 18ch;
+  margin: 0 0 1.25rem;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin: 3rem 0 0.85rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--line);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0 0 1rem;
 }
 
 .lede {
-  font-size: 17px;
-  line-height: 1.55;
   color: var(--muted);
-  max-width: 60ch;
-  margin: 0 0 22px;
 }
 
-.badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 30px; }
-
-.badge {
-  font-family: "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.note {
   color: var(--muted);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  padding: 5px 9px;
+  font-size: 0.9rem;
 }
 
-/* ---- download ---- */
-
-.download { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-
-.btn {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-decoration: none;
-  padding: 13px 24px;
-  border: 1px solid var(--ink);
-  font-weight: 500;
-  transition: transform 0.12s ease, opacity 0.12s ease;
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
 }
 
-.btn-primary { background: var(--ink); color: #fff; font-size: 17px; }
-.btn-primary:hover { color: #fff; opacity: 0.92; }
-.btn-primary:active { transform: translateY(1px); }
+a:hover {
+  text-decoration-thickness: 2px;
+}
 
-.btn-sub {
-  font-family: "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+ul,
+ol {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+}
+
+li {
+  margin-bottom: 0.5rem;
+}
+
+/* Both builds are named and neither is chosen for you. */
+.downloads {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.downloads li {
+  margin-bottom: 0.85rem;
+}
+
+.downloads a {
+  font-weight: 600;
+}
+
+.downloads .note {
+  display: block;
+}
+
+code {
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+table {
+  width: 100%;
+  margin: 0 0 1rem;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+th,
+td {
+  padding: 0.55rem 0.6rem 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  font-size: 0.78rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  opacity: 0.72;
-  font-weight: 400;
-  margin-top: 3px;
-}
-
-.alt-links { font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
-.alt-links a { color: var(--muted); }
-
-/* ---- sections ---- */
-
-main { padding: 56px 0 20px; }
-section { margin-bottom: 56px; }
-
-h2 {
-  font-size: 22px;
+  color: var(--muted);
   font-weight: 500;
-  letter-spacing: -0.22px;
-  margin: 0 0 14px;
 }
 
-h3 { font-size: 16px; font-weight: 500; margin: 0 0 6px; }
-
-.prose { max-width: 68ch; color: var(--muted); }
-.prose strong { color: var(--text); }
-.muted { color: var(--muted); font-size: 14px; }
-
-.callout {
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-left: 3px solid var(--coral);
-  padding: 22px 24px;
-}
-.callout h2 { margin-top: 0; }
-.callout p { max-width: 70ch; }
-.callout ol { margin: 12px 0; padding-left: 20px; }
-.callout li { margin-bottom: 5px; }
-
-.features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-  gap: 1px;
-  background: var(--border);
-  border: 1px solid var(--border);
+figure {
+  margin: 0 0 1rem;
 }
 
-.feature { background: var(--surface); padding: 20px 22px; }
-.feature p { margin: 0; color: var(--muted); font-size: 15px; }
-
-ul.plain { color: var(--muted); max-width: 68ch; padding-left: 20px; }
-ul.plain li { margin-bottom: 6px; }
-
-figure { margin: 0 0 24px; }
-
-figure img {
+/* width and height are set on the element too, so the space is reserved before
+   the file arrives and the text below it does not jump. */
+img {
+  display: block;
   width: 100%;
   height: auto;
-  max-width: 100%;
-  display: block;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid var(--line);
 }
 
-figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+figcaption {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
 
 footer {
-  border-top: 1px solid var(--border);
-  padding: 28px 0 44px;
-  font-size: 14px;
+  margin-top: 3rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
 }
-footer p { margin: 0 0 6px; }
 
-@media (max-width: 40rem) {
-  .hero { padding: 56px 0 44px; }
-  .features { grid-template-columns: minmax(0, 1fr); }
+footer p {
+  margin-bottom: 0.5rem;
 }

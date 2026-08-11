@@ -10,212 +10,174 @@
 </head>
 <body>
 
-<header class="hero">
-  <div class="wrap">
-    <span class="eyebrow">Automa</span>
-    <h1>Apply to jobs without the busywork.</h1>
-    <p class="lede">
-      A macOS app that fills out job applications on your own machine. It reads the
-      public internship and new-grad job boards, and drives a real browser through
-      the application form while you watch. Greenhouse, Lever, Ashby and Work at
-      a Startup are verified end to end; Workday fills its first step.
-    </p>
-
-    <p class="badges">
-      <span class="badge">Free</span>
-      <span class="badge">Open source</span>
-      <span class="badge">No account required</span>
-      <span class="badge">Works offline</span>
-    </p>
-
-    <div class="download">
-      <a class="btn btn-primary" id="primary-download"
-         href="https://github.com/darielgu/automa-app/releases/latest/download/Automa-mac-arm64.dmg">
-        Download for macOS
-        <span class="btn-sub" id="primary-arch">Apple Silicon</span>
-      </a>
-      <div class="alt-links">
-        <a id="alt-download" href="https://github.com/darielgu/automa-app/releases/latest/download/Automa-mac-x64.dmg">Intel Mac</a>
-        <span aria-hidden="true">·</span>
-        <a href="https://github.com/darielgu/automa-app/releases">All releases and checksums</a>
-        <span aria-hidden="true">·</span>
-        <a href="https://github.com/darielgu/automa-app">Source</a>
-      </div>
-    </div>
-  </div>
-</header>
-
 <main class="wrap">
 
-  <section class="callout" id="first-launch">
-    <h2>First launch takes one extra step</h2>
-    <p>
-      macOS will say <em>“Automa” cannot be opened because the developer cannot be
-      verified.</em> That is expected. The app is unsigned because an Apple Developer
-      certificate costs $99 a year and this project is free. The entire source is
-      published, so you can read exactly what it does.
-    </p>
-    <ol>
-      <li>Drag <strong>Automa</strong> into your Applications folder.</li>
-      <li><strong>Right-click</strong> (or Control-click) the app, choose <strong>Open</strong>, then <strong>Open</strong> again.</li>
-      <li>That is once. It opens normally from then on.</li>
-    </ol>
-    <p class="muted">
-      Prefer the terminal? <code>xattr -dr com.apple.quarantine /Applications/Automa.app</code>
-    </p>
-    <p class="muted">
-      Want to verify the download first? Compare
-      <code>shasum -a 256 ~/Downloads/Automa-mac-arm64.dmg</code>
-      against <code>SHA256SUMS.txt</code> on the release page.
-    </p>
-  </section>
+<h1>Automa</h1>
 
-  <section>
-    <h2>What it does</h2>
-    <div class="features">
-      <div class="feature">
-        <h3>Brings the jobs to you</h3>
-        <p>
-          Pulls the public SimplifyJobs internship and new-grad boards — about
-          33,000 listings — and keeps them in a local database you can search
-          instantly, online or not.
-        </p>
-      </div>
-      <div class="feature">
-        <h3>Fills the application</h3>
-        <p>
-          Drives a real browser inside the app window, so you watch every field
-          being filled. Greenhouse, Lever, Ashby and Work at a Startup are each
-          verified filling a complete application. Workday fills its first step;
-          the rest of its flow needs an account on the employer's tenant.
-        </p>
-      </div>
-      <div class="feature">
-        <h3>Never guesses about you</h3>
-        <p>
-          Questions about citizenship, sponsorship, disability, veteran status,
-          race or gender are never answered by a model. Automa uses what you
-          entered, or it stops and asks.
-        </p>
-      </div>
-      <div class="feature">
-        <h3>Nothing leaves your Mac</h3>
-        <p>
-          No account, no sign-in, no server, no telemetry. Your resume and answers
-          are stored in a single file on your machine and are sent only to the
-          application you chose to apply to.
-        </p>
-      </div>
-      <div class="feature">
-        <h3>Try it with a demo profile</h3>
-        <p>
-          One click loads a fictional candidate and a generated resume, and runs
-          against a built-in practice application. Nothing is submitted anywhere.
-        </p>
-      </div>
-      <div class="feature">
-        <h3>Tracks what you sent</h3>
-        <p>
-          Every run is recorded with the fields it filled and the evidence that it
-          did or did not submit. Finished applications land on a tracker board.
-        </p>
-      </div>
-    </div>
-  </section>
+<p class="lede">
+  A macOS app that fills out job applications on your own machine. It reads the
+  public internship and new-grad job boards, then drives a real browser through
+  the application form while you watch.
+</p>
 
-  <section>
-    <h2>How honest is the automation?</h2>
-    <p class="prose">
-      About <strong>59% of currently active listings</strong> are on an applicant
-      tracking system Automa has a purpose-built adapter for. But "has an adapter"
-      is not the same as "works", so the app grades every job honestly:
-    </p>
-    <ul class="plain">
-      <li><strong>Greenhouse, Lever, Ashby, Work at a Startup — verified.</strong> Each fills a complete application, including the resume upload, against a practice application built from that platform's own markup.</li>
-      <li><strong>Workday — partial.</strong> Fills the My Information step. A real Workday application runs several steps behind an account on the employer's own tenant, and that is not verified here.</li>
-      <li><strong>Everything else — generic.</strong> Company career sites, where Automa fills what it can and you finish.</li>
-    </ul>
-    <p class="prose">
-      That is the current, measured state rather than a roadmap. Every platform
-      ships with a practice application in the app, so you can see for yourself
-      what each adapter does before pointing it at a real posting.
-    </p>
-    <p class="prose">
-      Automa also refuses to claim success it cannot prove. A submission is only
-      reported as confirmed when there is real evidence — a confirmation page, a
-      success URL, or the form demonstrably gone. Otherwise it says
-      “pending confirmation” and leaves the judgement to you.
-    </p>
-  </section>
+<p class="lede">
+  Free, open source, and account-free. Your resume and answers stay in one
+  folder on your Mac.
+</p>
 
-  <section>
-    <h2>A look at it</h2>
-    <figure>
-      <img src="screenshot-jobs.png" alt="The Automa jobs screen, listing open roles with the applicant tracking system and what Automa can do with each one." loading="lazy" width="1400" />
-      <figcaption>Every listing says plainly whether Automa fills it, partly fills it, or leaves it to you.</figcaption>
-    </figure>
-    <figure>
-      <img src="screenshot-onboarding.png" alt="Automa first-run setup, with three steps and a button to explore using a demo profile." loading="lazy" width="1400" />
-      <figcaption>First run. No account, and a demo profile if you just want a look.</figcaption>
-    </figure>
-  </section>
+<h2>Download</h2>
 
-  <section>
-    <h2>Your data</h2>
-    <p class="prose">
-      Automa has no backend. There is no account to create and nothing to log in
-      to. Your profile, resume and answers live in
-      <code>~/Library/Application Support/Automa</code> and are readable only by
-      you. Job listings come from a
-      <a href="https://github.com/SimplifyJobs/Summer2026-Internships">public JSON file on GitHub</a>,
-      fetched no more than once an hour. There is no analytics of any kind, on
-      this page or in the app.
-    </p>
-  </section>
+<!--
+  Two plain links, no detection.
 
-  <section>
-    <h2>Requirements</h2>
-    <ul class="plain">
-      <li>macOS on Apple Silicon or Intel</li>
-      <li>About 400 MB of disk space</li>
-      <li>An internet connection to refresh the job list. Everything else works offline.</li>
-      <li>Optionally, your own OpenAI or Anthropic API key for free-text answers. Automa works without one, using deterministic rules.</li>
-    </ul>
-  </section>
+  The previous version picked one for you and picked it wrong: Safari on Apple
+  Silicon reports "Intel Mac OS X" in its user agent and does not implement
+  navigator.userAgentData, so the check fell through to the Intel build for
+  most Mac visitors. Naming both is shorter than the script was and cannot be
+  wrong.
+-->
+<ul class="downloads">
+  <li>
+    <a href="https://github.com/darielgu/automa-app/releases/latest/download/Automa-mac-arm64.dmg">Automa for Apple Silicon</a>
+    <span class="note">M1, M2, M3, M4 — every Mac since 2020</span>
+  </li>
+  <li>
+    <a href="https://github.com/darielgu/automa-app/releases/latest/download/Automa-mac-x64.dmg">Automa for Intel</a>
+    <span class="note">Macs made before late 2020</span>
+  </li>
+</ul>
 
-</main>
+<p class="note">
+  Not sure which? Apple menu → About This Mac. If it says Apple M-anything, take
+  the first one.
+  <a href="https://github.com/darielgu/automa-app/releases">All releases and checksums</a>.
+</p>
+
+<h2>First launch takes one extra step</h2>
+
+<p>
+  macOS will say <em>“Automa” cannot be opened because the developer cannot be
+  verified.</em> That is expected. The app is unsigned because an Apple Developer
+  certificate costs $99 a year and this project is free. The whole source is
+  published, so you can read exactly what it does.
+</p>
+
+<ol>
+  <li>Drag <strong>Automa</strong> into your Applications folder.</li>
+  <li><strong>Right-click</strong> the app, choose <strong>Open</strong>, then <strong>Open</strong> again.</li>
+  <li>That is once. It opens normally from then on.</li>
+</ol>
+
+<p class="note">
+  From the terminal instead: <code>xattr -dr com.apple.quarantine /Applications/Automa.app</code>
+</p>
+
+<p class="note">
+  To check the download first, compare <code>shasum -a 256 ~/Downloads/Automa-mac-arm64.dmg</code>
+  against <code>SHA256SUMS.txt</code> on the release page.
+</p>
+
+<h2>What it does</h2>
+
+<ul>
+  <li>
+    Pulls the public SimplifyJobs internship and new-grad boards — about 32,000
+    listings — into a local database you can search instantly, online or not.
+  </li>
+  <li>
+    Fills the application in a real browser inside the app window, so you watch
+    every field being filled.
+  </li>
+  <li>
+    Never answers a question about citizenship, sponsorship, disability, veteran
+    status, race or gender with a model. It uses what you entered, or it stops
+    and asks.
+  </li>
+  <li>
+    Records every run with the fields it filled, the value it used, and where
+    that value came from. Confirmed applications land on a tracker board.
+  </li>
+</ul>
+
+<h2>What actually works</h2>
+
+<p>
+  About 59% of currently active listings are on an applicant tracking system
+  Automa has a purpose-built adapter for. Having an adapter is not the same as
+  working, so each one is graded by what it has been observed to do:
+</p>
+
+<table>
+  <thead>
+    <tr><th>Platform</th><th>State</th><th>What that means</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Greenhouse, Lever, Ashby, Work at a Startup</td>
+      <td>Verified</td>
+      <td>Each fills a complete application, resume upload included, against a practice application built from that platform's own markup.</td>
+    </tr>
+    <tr>
+      <td>Workday</td>
+      <td>Partial</td>
+      <td>Fills the My Information step. The rest runs behind an account on the employer's own tenant, and that is not verified here.</td>
+    </tr>
+    <tr>
+      <td>Everything else</td>
+      <td>Generic</td>
+      <td>Company career sites. Automa fills what it recognises and you finish.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Automa also refuses to claim a success it cannot prove. A submission is
+  reported as confirmed only with real evidence: a confirmation page, a success
+  URL, or the form demonstrably gone. Otherwise it says pending confirmation and
+  leaves the judgement to you.
+</p>
+
+<h2>A look at it</h2>
+
+<figure>
+  <img src="screenshot-jobs.png" width="1420" height="912" loading="lazy"
+       alt="The Automa jobs screen. Each row shows a company, a position, the applicant tracking system behind it, and whether Automa fills that application automatically or leaves it to you." />
+  <figcaption>Every listing says plainly whether Automa fills it or you finish it.</figcaption>
+</figure>
+
+<h2>Your data</h2>
+
+<p>
+  There is no backend, no account and nothing to log in to. Your profile, resume
+  and answers live in <code>~/Library/Application Support/Automa</code> and are
+  readable only by you. Listings come from a
+  <a href="https://github.com/SimplifyJobs/Summer2026-Internships">public JSON file on GitHub</a>,
+  fetched no more than once an hour. There is no analytics of any kind, on this
+  page or in the app.
+</p>
+
+<h2>Requirements</h2>
+
+<ul>
+  <li>macOS on Apple Silicon or Intel</li>
+  <li>About 400 MB of disk space</li>
+  <li>An internet connection to refresh the job list. Everything else works offline.</li>
+  <li>Optionally your own OpenAI or Anthropic API key for free-text answers. Automa works without one, using deterministic rules.</li>
+</ul>
 
 <footer>
-  <div class="wrap">
-    <p>
-      <a href="https://github.com/darielgu/automa-app">Source</a> ·
-      <a href="https://github.com/darielgu/automa-app/issues">Report an issue</a> ·
-      <a href="https://github.com/darielgu/automa-app/blob/main/LICENSE">MIT license</a>
-    </p>
-    <p class="muted">
-      Not affiliated with SimplifyJobs, Greenhouse, Lever, Ashby, Workday or
-      Y Combinator. Job listings belong to their respective sources.
-    </p>
-  </div>
+  <p>
+    <a href="https://github.com/darielgu/automa-app">Source</a> ·
+    <a href="https://github.com/darielgu/automa-app/issues">Report an issue</a> ·
+    <a href="https://github.com/darielgu/automa-app/blob/main/LICENSE">MIT license</a>
+  </p>
+  <p class="note">
+    Not affiliated with SimplifyJobs, Greenhouse, Lever, Ashby, Workday or
+    Y Combinator. Listings belong to their respective sources.
+  </p>
 </footer>
 
-<script>
-  // Both links are always visible, so a wrong guess can never strand anyone.
-  // This only reorders which one is presented first.
-  (function () {
-    var ua = navigator.userAgent || "";
-    var arch = (navigator.userAgentData && navigator.userAgentData.platform) || "";
-    var looksIntel = /Intel/i.test(ua) && !/ARM|Apple/i.test(arch);
-    if (!looksIntel) return;
-    var primary = document.getElementById("primary-download");
-    var alt = document.getElementById("alt-download");
-    var label = document.getElementById("primary-arch");
-    primary.href = "https://github.com/darielgu/automa-app/releases/latest/download/Automa-mac-x64.dmg";
-    label.textContent = "Intel";
-    alt.href = "https://github.com/darielgu/automa-app/releases/latest/download/Automa-mac-arm64.dmg";
-    alt.textContent = "Apple Silicon";
-  })();
-</script>
+</main>
 
 </body>
 </html>

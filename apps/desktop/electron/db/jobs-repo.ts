@@ -32,6 +32,14 @@ export interface JobQuery {
   terms?: string[];
   /** Only jobs an adapter can drive end to end. */
   automatableOnly?: boolean;
+  /**
+   * Match any one of these phrases, rather than all of them.
+   *
+   * `search` ANDs its tokens, which is right for something a person typed. It
+   * is wrong for saved preferences: someone targeting "Software Engineer" and
+   * "Data Scientist" wants either, and ANDing them returns nothing.
+   */
+  matchAny?: string[];
   includeHidden?: boolean;
   includeApplied?: boolean;
   limit?: number;
@@ -101,6 +109,20 @@ export function sanitizeFtsQuery(input: string): string {
     .filter(Boolean);
   if (!tokens.length) return "";
   return tokens.map((token) => `"${token}"`).join(" ");
+}
+
+/**
+ * One FTS5 query matching any of the given phrases, each phrase matched whole.
+ *
+ * Returns "" for an empty list so callers can treat "no preferences" as "no
+ * filter" rather than as "match nothing".
+ */
+export function buildAnyPhraseQuery(phrases: string[]): string {
+  const groups = phrases
+    .map((phrase) => sanitizeFtsQuery(phrase))
+    .filter(Boolean)
+    .map((group) => `(${group})`);
+  return groups.join(" OR ");
 }
 
 export function upsertJobs(db: Db, listings: NormalizedListing[]): number {
@@ -206,6 +228,14 @@ export function queryJobs(db: Db, query: JobQuery = {}): JobPage {
   if (search) {
     where.push("j.rowid IN (SELECT rowid FROM jobs_fts WHERE jobs_fts MATCH ?)");
     params.push(search);
+  }
+
+  // ANDed with `search`, so typing narrows within the saved preferences rather
+  // than replacing them.
+  const matchAny = buildAnyPhraseQuery(query.matchAny ?? []);
+  if (matchAny) {
+    where.push("j.rowid IN (SELECT rowid FROM jobs_fts WHERE jobs_fts MATCH ?)");
+    params.push(matchAny);
   }
 
   const joins = `

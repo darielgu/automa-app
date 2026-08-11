@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { normalizeListing, type NormalizedListing } from "@automa/job-feed-core";
 import { openDatabase, runMigrations, transaction, type Db } from "./database.js";
-import { countJobs, getJob, jobFacets, queryJobs, sanitizeFtsQuery, setJobFeedback, sweepRemovedJobs, upsertJobs } from "./jobs-repo.js";
+import { buildAnyPhraseQuery, countJobs, getJob, jobFacets, queryJobs, sanitizeFtsQuery, setJobFeedback, sweepRemovedJobs, upsertJobs } from "./jobs-repo.js";
 import {
   addResume, appendRunEvent, createRun, getActiveResume, getFeedMeta, getProfile, getSetting,
   listApplied, listRunEvents, listResumes, listRuns, moveAppliedStage, saveFeedMeta, saveProfile,
@@ -368,6 +368,55 @@ test("a failed transaction leaves no partial write", () => {
       })
     );
     assert.equal(countJobs(db).total, 0);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("saved preferences match any role, not all of them", () => {
+  const { db, dir } = tempDb();
+  try {
+    upsertJobs(db, [
+      listing({ id: "44444444-4444-4444-8444-444444444444", title: "Software Engineer Intern" }),
+      listing({ id: "55555555-5555-4555-8555-555555555555", title: "Data Scientist Intern" }),
+      listing({ id: "66666666-6666-4666-8666-666666666666", title: "Mechanical Technician" })
+    ]);
+
+    // The whole point: ANDing these two phrases matches nothing, because no
+    // posting is both. A person who saved both wants either.
+    const both = queryJobs(db, { matchAny: ["Software Engineer", "Data Scientist"] });
+    assert.equal(both.total, 2);
+
+    const one = queryJobs(db, { matchAny: ["Software Engineer"] });
+    assert.equal(one.total, 1);
+
+    // No preferences must mean no filter, never "match nothing".
+    assert.equal(buildAnyPhraseQuery([]), "");
+    assert.equal(queryJobs(db, { matchAny: [] }).total, 3);
+
+    // Typing narrows within the preferences rather than replacing them.
+    const narrowed = queryJobs(db, { matchAny: ["Software Engineer", "Data Scientist"], search: "Data" });
+    assert.equal(narrowed.total, 1);
+    assert.equal(narrowed.jobs[0]?.title, "Data Scientist Intern");
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("hidden jobs come back when asked for", () => {
+  const { db, dir } = tempDb();
+  try {
+    upsertJobs(db, [listing()]);
+    const id = queryJobs(db, {}).jobs[0]!.simplifyId;
+    setJobFeedback(db, id, "hidden");
+
+    // Thumbs-down was irreversible from the UI because nothing ever passed
+    // this flag; the row still has to be reachable for that to be fixable.
+    assert.equal(queryJobs(db, {}).total, 0);
+    assert.equal(queryJobs(db, { includeHidden: true }).total, 1);
+    assert.equal(queryJobs(db, { includeHidden: true }).jobs[0]?.feedback, "hidden");
   } finally {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });

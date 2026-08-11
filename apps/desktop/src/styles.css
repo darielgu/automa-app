@@ -2300,3 +2300,70 @@
   flex-wrap: wrap;
   gap: 0.6rem;
 }
+
+/* Jobs filter bar. The corpus is ~32,000 rows; without these controls the
+   table was a fixed window onto the newest hundred. */
+.desktop-jobs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.desktop-jobs-filters__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 16rem;
+  min-width: 12rem;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, white);
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+
+.desktop-jobs-filters__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.desktop-jobs-filters__select {
+  height: 36px;
+  flex: 0 1 12rem;
+}
+
+.desktop-jobs-filters__toggle,
+.desktop-jobs-filters__clear {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, white);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* A filter that is on has to look on, or the count below it is a mystery. */
+.desktop-jobs-filters__toggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--background));
+  color: var(--foreground);
+}
+
+.desktop-jobs-filters__clear {
+  border-style: dashed;
+}
+
+.desktop-jobs-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+}

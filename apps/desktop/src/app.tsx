@@ -534,8 +534,22 @@ interface FeedStatus {
   counts?: { total?: number; active?: number };
 }
 
+/** What `jobs:list` really returns. The cursor used to be dropped here. */
+interface LocalJobPage {
+  jobs: LocalJobRecord[];
+  total: number;
+  nextCursor: { posted: number | null; id: string } | null;
+}
+
+interface JobFacets {
+  platforms: Array<{ value: string; count: number }>;
+  categories: Array<{ value: string; count: number }>;
+  terms: Array<{ value: string; count: number }>;
+}
+
 interface LocalBridge {
-  listJobs(query: Record<string, unknown>): Promise<{ jobs: LocalJobRecord[]; total: number }>;
+  listJobs(query: Record<string, unknown>): Promise<LocalJobPage>;
+  jobFacets(): Promise<JobFacets>;
   setJobFeedback(jobId: string, verdict: "liked" | "hidden" | "saved" | null): Promise<boolean>;
   syncJobs(force?: boolean): Promise<unknown>;
   jobsStatus(): Promise<FeedStatus>;
@@ -550,7 +564,8 @@ interface LocalBridge {
 const bridge = (typeof window !== "undefined" && window.automaDesktop
   ? (window.automaDesktop as unknown as LocalBridge)
   : {
-      listJobs: async () => ({ jobs: [], total: 0 }),
+      listJobs: async () => ({ jobs: [], total: 0, nextCursor: null }),
+      jobFacets: async () => ({ platforms: [], categories: [], terms: [] }),
       setJobFeedback: async () => true,
       syncJobs: async () => undefined,
       jobsStatus: async () => ({ provider: "github" as const, counts: { total: 0, active: 0 } }),
@@ -1676,6 +1691,65 @@ function JobsPage({
     return new Map(entries);
   }, [runs]);
 
+  const PAGE_SIZE = 100;
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [platformFilter, setPlatformFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [includeHidden, setIncludeHidden] = useState(false);
+  const [usePreferences, setUsePreferences] = useState(true);
+  const [facets, setFacets] = useState<JobFacets>({ platforms: [], categories: [], terms: [] });
+  const [totalMatching, setTotalMatching] = useState(0);
+  const [nextCursor, setNextCursor] = useState<{ posted: number | null; id: string } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Typing should not fire a query per keystroke against 32,000 rows.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 220);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    void bridge.jobFacets().then(setFacets).catch(() => undefined);
+  }, [feedVersion]);
+
+  const preferenceRoles = useMemo(
+    () => (onboarding?.preferences.desiredRoles ?? []).map((role) => role.trim()).filter(Boolean),
+    [onboarding]
+  );
+
+  const buildQuery = useCallback(
+    (cursor: { posted: number | null; id: string } | null) => ({
+      limit: PAGE_SIZE,
+      automatableOnly: false,
+      search: search || undefined,
+      // Only a real preference filters anything; an empty list must not mean
+      // "match nothing".
+      matchAny: usePreferences && preferenceRoles.length ? preferenceRoles : undefined,
+      platforms: platformFilter ? [platformFilter] : undefined,
+      categories: categoryFilter ? [categoryFilter] : undefined,
+      includeHidden: includeHidden || undefined,
+      cursorPosted: cursor?.posted ?? null,
+      cursorId: cursor?.id ?? null
+    }),
+    [search, usePreferences, preferenceRoles, platformFilter, categoryFilter, includeHidden]
+  );
+
+  const applyPage = useCallback((page: LocalJobPage, append: boolean) => {
+    const incoming = page.jobs.map(toJobFeedItem);
+    setJobs((current) => (append ? [...current, ...incoming] : incoming));
+    setSupportById((current) => ({
+      ...(append ? current : {}),
+      ...Object.fromEntries(page.jobs.map((job) => [job.simplifyId, job.support]))
+    }));
+    setJobFeedback((current) => ({
+      ...(append ? current : {}),
+      ...Object.fromEntries(incoming.map((job) => [job.id, job.feedback ?? null]))
+    }));
+    setTotalMatching(page.total);
+    setNextCursor(page.nextCursor);
+  }, []);
+
   useEffect(() => {
     setJobsLoading(true);
     setJobsError(null);
@@ -1684,16 +1758,13 @@ function JobsPage({
       try {
         // The corpus lives in local SQLite. If it is empty this is a first run,
         // so pull the feed before showing an empty state.
-        let page = await bridge.listJobs({ limit: 100, automatableOnly: false });
-        if (!page.jobs.length) {
+        let page = await bridge.listJobs(buildQuery(null));
+        if (!page.jobs.length && !search && !platformFilter && !categoryFilter) {
           await bridge.syncJobs(false);
-          page = await bridge.listJobs({ limit: 100, automatableOnly: false });
+          page = await bridge.listJobs(buildQuery(null));
         }
         if (cancelled) return;
-        const nextJobs = page.jobs.map(toJobFeedItem);
-        setJobs(nextJobs);
-        setSupportById(Object.fromEntries(page.jobs.map((job) => [job.simplifyId, job.support])));
-        setJobFeedback(Object.fromEntries(nextJobs.map((job) => [job.id, job.feedback ?? null])));
+        applyPage(page, false);
         setJobsLoading(false);
       } catch (error) {
         if (cancelled) return;
@@ -1706,7 +1777,31 @@ function JobsPage({
     return () => {
       cancelled = true;
     };
-  }, [refreshToken, feedVersion]);
+  }, [refreshToken, feedVersion, buildQuery, applyPage, search, platformFilter, categoryFilter]);
+
+  /** Walks the corpus by keyset cursor, so a sync mid-read cannot skew a page. */
+  async function loadMoreJobs() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      applyPage(await bridge.listJobs(buildQuery(nextCursor)), true);
+    } catch (error) {
+      setJobsError(error instanceof Error ? error.message : "Could not load more listings.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const filtersActive = Boolean(search || platformFilter || categoryFilter || includeHidden || (usePreferences && preferenceRoles.length));
+
+  function clearFilters() {
+    setSearchInput("");
+    setSearch("");
+    setPlatformFilter("");
+    setCategoryFilter("");
+    setIncludeHidden(false);
+    setUsePreferences(false);
+  }
 
   // The feed is refreshed by the main process on launch and hourly. Without
   // this the first run showed only the seeded practice jobs, because the fetch
@@ -1945,9 +2040,14 @@ function JobsPage({
         <div className="desktop-jobs-banner__content">
           <div className="desktop-jobs-banner__metrics" aria-label="Job feed summary">
             <p className="desktop-jobs-banner__copy">
-              {preferenceSummaryCount > 0
-                ? `Targeting ${desiredRoles.slice(0, 2).join(", ") || "your selected roles"} across ${desiredLocations.slice(0, 2).join(", ") || "your preferred locations"}.`
-                : "Set your target roles, locations, and employment preferences so Automa can keep curating the right feed."}
+              {/* This used to promise curation the query never performed. It
+                  now describes exactly what the filter below is doing, and
+                  says so differently when the filter is switched off. */}
+              {preferenceRoles.length === 0
+                ? "Add target roles in Settings and the feed can filter to them. Until then it shows everything."
+                : usePreferences
+                  ? `Filtered to ${preferenceRoles.slice(0, 2).join(", ")}${preferenceRoles.length > 2 ? ` and ${preferenceRoles.length - 2} more` : ""}.`
+                  : "Showing every listing. Turn on \u201cMatching your roles\u201d to narrow it."}
             </p>
           </div>
           <div className="desktop-jobs-banner__toolbar">
@@ -1971,7 +2071,12 @@ function JobsPage({
           <div className="min-w-0">
             <CardTitle>Open roles</CardTitle>
             <CardDescription>
-              From the public SimplifyJobs boards, stored on this Mac. Click a row for detail.
+              {/* The count is the honest part: the table is a window onto a
+                  much larger corpus, and saying so is the difference between
+                  "this is all there is" and "here are the first hundred". */}
+              {jobsLoading
+                ? "From the public SimplifyJobs boards, stored on this Mac."
+                : `Showing ${visibleJobs.length} of ${totalMatching.toLocaleString()}${filtersActive ? " matching" : ""} listing${totalMatching === 1 ? "" : "s"}, stored on this Mac.`}
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -2018,6 +2123,73 @@ function JobsPage({
           </div>
         </CardHeader>
         <CardContent>
+          <div className="desktop-jobs-filters">
+            <label className="desktop-jobs-filters__search">
+              <Search className="size-3.5" aria-hidden="true" />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Search title or company"
+                aria-label="Search listings by title or company"
+              />
+            </label>
+
+            <select
+              className="desktop-select desktop-jobs-filters__select"
+              value={platformFilter}
+              onChange={(event) => setPlatformFilter(event.target.value)}
+              aria-label="Filter by application system"
+            >
+              <option value="">Any system</option>
+              {facets.platforms.map((facet) => (
+                <option key={facet.value} value={facet.value}>
+                  {facet.value} ({facet.count.toLocaleString()})
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="desktop-select desktop-jobs-filters__select"
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              aria-label="Filter by category"
+            >
+              <option value="">Any category</option>
+              {facets.categories.map((facet) => (
+                <option key={facet.value} value={facet.value}>
+                  {facet.value} ({facet.count.toLocaleString()})
+                </option>
+              ))}
+            </select>
+
+            {preferenceRoles.length ? (
+              <button
+                type="button"
+                className="desktop-jobs-filters__toggle"
+                aria-pressed={usePreferences}
+                onClick={() => setUsePreferences((value) => !value)}
+              >
+                {`Matching your roles${usePreferences ? "" : " (off)"}`}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              className="desktop-jobs-filters__toggle"
+              aria-pressed={includeHidden}
+              onClick={() => setIncludeHidden((value) => !value)}
+            >
+              {includeHidden ? "Showing hidden" : "Show hidden"}
+            </button>
+
+            {filtersActive ? (
+              <button type="button" className="desktop-jobs-filters__clear" onClick={clearFilters}>
+                Clear
+              </button>
+            ) : null}
+          </div>
+
           {jobsError ? (
             <div className="desktop-surface-state desktop-surface-state--error">
               <div className="desktop-surface-state__copy">{jobsError}</div>
@@ -2025,14 +2197,18 @@ function JobsPage({
           ) : !jobsLoading && visibleJobs.length === 0 ? (
             <div className="desktop-surface-state">
               <div className="desktop-surface-state__copy">
-                {jobs.length === 0
-                  ? "No listings yet. Automa reads the public Simplify job lists; pull them now and they stay on this machine."
-                  : "You have applied to everything currently in the feed. New listings arrive as the source repositories are updated."}
+                {filtersActive
+                  ? "Nothing matches these filters. Widen them, or clear them to see the whole feed."
+                  : "No listings yet. Automa reads the public Simplify job lists; pull them now and they stay on this machine."}
               </div>
               <div className="desktop-surface-state__actions">
-                <Button onClick={() => void resyncJobs()} disabled={resyncing}>
-                  {resyncing ? "Checking for listings..." : jobs.length === 0 ? "Get listings" : "Check for new listings"}
-                </Button>
+                {filtersActive ? (
+                  <Button onClick={clearFilters}>Clear filters</Button>
+                ) : (
+                  <Button onClick={() => void resyncJobs()} disabled={resyncing}>
+                    {resyncing ? "Checking for listings..." : "Get listings"}
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => navigate("/applied")}>
                   See what you applied to
                 </Button>
@@ -2126,6 +2302,16 @@ function JobsPage({
               }}
             />
           )}
+
+          {/* Paging by cursor, not offset: a sync landing between two pages
+              cannot shift the window and make a row repeat or vanish. */}
+          {!jobsError && !jobsLoading && nextCursor ? (
+            <div className="desktop-jobs-more">
+              <Button variant="outline" onClick={() => void loadMoreJobs()} disabled={loadingMore}>
+                {loadingMore ? "Loading…" : `Load ${Math.min(PAGE_SIZE, Math.max(0, totalMatching - visibleJobs.length)).toLocaleString()} more`}
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </WorkspaceFrame>

@@ -9,6 +9,7 @@ import {
   type SourceKey
 } from "@automa/job-feed-core";
 import { getFeedMeta, listFeedMeta, saveFeedMeta, getSetting } from "../db/app-repo.js";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { countJobs, sweepRemovedJobs, upsertJobs } from "../db/jobs-repo.js";
 import type { Db } from "../db/database.js";
 
@@ -25,6 +26,24 @@ export interface FeedSyncResult {
   removed: number;
   counts: { total: number; active: number; automatable: number };
   ranAt: string;
+}
+
+
+/**
+ * Writes listings in chunks, yielding to the event loop between them.
+ *
+ * node:sqlite is synchronous, so upserting ~32,000 rows in one transaction
+ * blocks the main process for seconds. That freezes the window and stalls any
+ * IPC the user triggers in the meantime — a click on "Explore with a demo
+ * profile" during the first sync would simply hang.
+ */
+async function upsertJobsInChunks(db: Db, rows: NormalizedListing[], chunkSize = 2000): Promise<number> {
+  let written = 0;
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    written += upsertJobs(db, rows.slice(index, index + chunkSize));
+    await yieldToEventLoop();
+  }
+  return written;
 }
 
 export interface SupabaseConfig {
@@ -184,7 +203,7 @@ export async function syncJobFeed(
   if (supabase) {
     try {
       const rows = await fetchFromSupabase(supabase, options.signal);
-      upserted = upsertJobs(db, rows);
+      upserted = await upsertJobsInChunks(db, rows);
       for (const source of SIMPLIFY_SOURCES) {
         saveFeedMeta(db, { repo: source.key, lastFetchedAt: nowSeconds(), lastSuccessAt: nowSeconds(), lastHttpStatus: 200, lastError: null });
         repos.push({ repo: source.key, status: 200, fetched: 0, skippedRows: 0 });
@@ -225,7 +244,7 @@ export async function syncJobFeed(
 
   // Merge before writing: Summer2027 currently serves a byte copy of
   // Summer2026, and hundreds of postings appear in two feeds.
-  if (batches.length) upserted = upsertJobs(db, mergeById(batches));
+  if (batches.length) upserted = await upsertJobsInChunks(db, mergeById(batches));
 
   const freshRepos = listFeedMeta(db)
     .filter((meta) => meta.lastSuccessAt && Date.now() / 1000 - meta.lastSuccessAt < 6 * 3600)

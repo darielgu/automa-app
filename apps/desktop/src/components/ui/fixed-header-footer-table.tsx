@@ -133,13 +133,13 @@ export default function FixedHeaderFooterTable({
                 </TableHead>
                 <TableHead
                   className={cn(
-                    showStatusColumn ? (selectionMode ? "w-[27%]" : "w-[30%]") : selectionMode ? "w-[37%]" : "w-[38%]"
+                    showStatusColumn ? (selectionMode ? "w-[30%]" : "w-[34%]") : selectionMode ? "w-[42%]" : "w-[46%]"
                   )}
                 >
                   {positionColumnLabel}
                 </TableHead>
                 {showStatusColumn ? <TableHead className="w-[14%]">{statusColumnLabel}</TableHead> : null}
-                <TableHead className="w-[18%]">{dateColumnLabel}</TableHead>
+                <TableHead className="w-[14%]">{dateColumnLabel}</TableHead>
                 <TableHead
                   className={cn(
                     showStatusColumn ? (selectionMode ? "w-[21%]" : "w-[18%]") : selectionMode ? "w-[25%]" : "w-[22%]",
@@ -266,9 +266,11 @@ export default function FixedHeaderFooterTable({
                       ) : null}
                       <TableCell>
                         <div className="flex min-w-0 flex-col gap-1">
-                          <span className="text-[0.72rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                            {item.dateLabel ?? defaultDateLabel}
-                          </span>
+                          {item.dateLabel && item.dateLabel !== defaultDateLabel ? (
+                            <span className="text-[0.72rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                              {item.dateLabel}
+                            </span>
+                          ) : null}
                           <div className="flex items-center gap-2 text-foreground">
                             <CalendarDays className="size-3.5 text-muted-foreground" />
                             <span className="truncate">{item.postedLabel}</span>

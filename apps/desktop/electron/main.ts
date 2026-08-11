@@ -227,11 +227,11 @@ function emitRunEvent(runId: string, event: string, data?: unknown, level = "inf
  * page uses its platform's real markup, so the genuine adapter drives it.
  */
 const DEMO_JOBS = [
-  { id: "00000000-0000-4000-8000-00000000d3m0", file: "greenhouse-demo.html",     platform: "greenhouse",     title: "Software Engineer (practice application)" },
-  { id: "00000000-0000-4000-8000-00000000d3m1", file: "lever-demo.html",          platform: "lever",          title: "Data Analyst (practice application)" },
-  { id: "00000000-0000-4000-8000-00000000d3m2", file: "ashby-demo.html",          platform: "ashby",          title: "Product Engineer (practice application)" },
-  { id: "00000000-0000-4000-8000-00000000d3m3", file: "workday-demo.html",        platform: "workday",        title: "Field Engineer (practice application)" },
-  { id: "00000000-0000-4000-8000-00000000d3m4", file: "workatastartup-demo.html", platform: "workatastartup", title: "Founding Engineer (practice application)" }
+  { id: "00000000-0000-4000-8000-00000000d3m0", file: "greenhouse-demo.html",     platform: "greenhouse",     title: "Software Engineer — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m1", file: "lever-demo.html",          platform: "lever",          title: "Data Analyst — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m2", file: "ashby-demo.html",          platform: "ashby",          title: "Product Engineer — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m3", file: "workday-demo.html",        platform: "workday",        title: "Field Engineer — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m4", file: "workatastartup-demo.html", platform: "workatastartup", title: "Founding Engineer — practice" }
 ] as const;
 
 const DEMO_JOB_ID = DEMO_JOBS[0].id;

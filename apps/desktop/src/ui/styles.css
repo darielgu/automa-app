@@ -29,8 +29,11 @@
   --card-foreground: oklch(0.17 0.01 45);
   --popover: oklch(0.993 0.003 84);
   --popover-foreground: oklch(0.17 0.01 45);
-  --primary: oklch(0.67 0.21 41);
-  --primary-foreground: oklch(0.985 0.004 84);
+  /* Midnight Ink. design.md is explicit that primary chrome is the deep neutral
+     and that the coral is a selective accent, never the main action colour. */
+  --primary: oklch(0.19 0.028 265);
+  --primary-foreground: oklch(0.99 0.003 84);
+  --brand-accent: oklch(0.7 0.12 35);
   --secondary: oklch(0.955 0.004 84);
   --secondary-foreground: oklch(0.17 0.01 45);
   --muted: oklch(0.955 0.004 84);
@@ -40,16 +43,17 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.89 0.01 60);
   --input: oklch(0.89 0.01 60);
-  --ring: oklch(0.67 0.21 41 / 35%);
+  --ring: oklch(0.19 0.028 265 / 30%);
   --sidebar: oklch(0.985 0.004 84);
   --sidebar-foreground: oklch(0.17 0.01 45);
-  --sidebar-primary: oklch(0.67 0.21 41);
+  --sidebar-primary: oklch(0.19 0.028 265);
   --sidebar-primary-foreground: oklch(0.985 0.004 84);
   --sidebar-accent: oklch(0.955 0.004 84);
   --sidebar-accent-foreground: oklch(0.17 0.01 45);
   --sidebar-border: oklch(0.89 0.01 60);
-  --sidebar-ring: oklch(0.67 0.21 41 / 35%);
-  --radius: 0.625rem;
+  --sidebar-ring: oklch(0.19 0.028 265 / 30%);
+  /* Sharp geometry per design.md: large panels 4px, controls effectively 0. */
+  --radius: 0.25rem;
   --hero-copy: oklch(0.5 0.015 45);
   --frame-inset: clamp(1.5rem, 6vw, 4.5rem);
   --frame-top: clamp(5rem, 9vw, 6rem);
@@ -72,7 +76,7 @@
   --card-foreground: oklch(0.97 0.004 84);
   --popover: oklch(0.2 0.01 45);
   --popover-foreground: oklch(0.97 0.004 84);
-  --primary: oklch(0.72 0.2 41);
+  --primary: oklch(0.93 0.006 84);
   --primary-foreground: oklch(0.16 0.01 45);
   --secondary: oklch(0.24 0.01 45);
   --secondary-foreground: oklch(0.97 0.004 84);

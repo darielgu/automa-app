@@ -561,6 +561,13 @@ const bridge = (typeof window !== "undefined" && window.automaDesktop
       isGuest: async () => false
     }) as LocalBridge;
 
+/** One short, honest line about what Automa can do with this posting. */
+function describeJobSupport(support?: string): string {
+  if (support === "verified") return "Fills automatically";
+  if (support === "experimental") return "Partial — check it";
+  return "You finish it";
+}
+
 /** A stored job as the jobs screen wants it. */
 function toJobFeedItem(job: LocalJobRecord): JobFeedItem {
   const tags = [job.category, ...job.terms].filter((tag): tag is string => Boolean(tag));
@@ -927,12 +934,12 @@ function SidebarLogo() {
   return (
     <span className="relative block size-8 shrink-0 overflow-hidden">
       <img
-        src="/Automa-B-NBG.png"
+        src="./Automa-B-NBG.png"
         alt="Automa"
         className="pointer-events-none h-full w-full object-contain dark:hidden"
       />
       <img
-        src="/Automa-NBG.png"
+        src="./Automa-NBG.png"
         alt="Automa"
         className="pointer-events-none hidden h-full w-full object-contain dark:block"
       />
@@ -999,19 +1006,9 @@ function SidebarFooterPanel({ session }: { session?: SessionState["user"] | null
   const profileInitial = profileLabel.trim().charAt(0).toUpperCase() || "A";
   const quickActions = [
     {
-      label: "Profile",
+      label: "Edit profile",
       icon: FileText,
       onClick: () => navigate("/onboarding")
-    },
-    {
-      label: "Runs",
-      icon: PlayCircle,
-      onClick: () => navigate("/runs")
-    },
-    {
-      label: "Applied",
-      icon: CheckCircle2,
-      onClick: () => navigate("/applied")
     }
   ];
 
@@ -1054,7 +1051,7 @@ function SidebarFooterPanel({ session }: { session?: SessionState["user"] | null
   return (
     <div className="desktop-sidebar-footer group-data-[collapsible=icon]:hidden">
       <SidebarGroup className="p-0">
-        <SidebarGroupLabel className="h-7 px-2 text-[0.7rem]">Quick access</SidebarGroupLabel>
+        
         <SidebarGroupContent>
           <SidebarMenu>
           {quickActions.map((action) => {
@@ -1468,6 +1465,8 @@ function JobsPage({
 }) {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobFeedItem[]>([]);
+  const [supportById, setSupportById] = useState<Record<string, string>>({});
+  const [feedVersion, setFeedVersion] = useState(0);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
@@ -1500,6 +1499,7 @@ function JobsPage({
         if (cancelled) return;
         const nextJobs = page.jobs.map(toJobFeedItem);
         setJobs(nextJobs);
+        setSupportById(Object.fromEntries(page.jobs.map((job) => [job.simplifyId, job.support])));
         setJobFeedback(Object.fromEntries(nextJobs.map((job) => [job.id, job.feedback ?? null])));
         setJobsLoading(false);
       } catch (error) {
@@ -1513,7 +1513,17 @@ function JobsPage({
     return () => {
       cancelled = true;
     };
-  }, [refreshToken]);
+  }, [refreshToken, feedVersion]);
+
+  // The feed is refreshed by the main process on launch and hourly. Without
+  // this the first run showed only the seeded practice jobs, because the fetch
+  // above had already completed before the sync finished.
+  useEffect(() => {
+    const unsubscribe = (window.automaDesktop as unknown as {
+      onJobsUpdated?: (listener: () => void) => () => void;
+    })?.onJobsUpdated?.(() => setFeedVersion((value) => value + 1));
+    return () => unsubscribe?.();
+  }, []);
   const activeRunCount = runs.filter((run) => run.status === "running" || run.status === "queued").length;
   const submittedRunCount = appliedJobs.length;
   const desiredRoles = onboarding?.preferences.desiredRoles ?? [];
@@ -1664,7 +1674,7 @@ function JobsPage({
     title: job.title,
     postedLabel: formatPostedAt(job.postedAt),
     providerLabel: formatProviderLabel(job.source),
-    feedReasonLabel: formatFeedReason(job.feedReason),
+    feedReasonLabel: describeJobSupport(supportById[job.id]),
     applied: appliedIds.has(job.id),
     queued: activeRun?.status === "queued",
     applying: queueing || activeRun?.status === "running",
@@ -1699,7 +1709,7 @@ function JobsPage({
   return (
     <WorkspaceFrame
       headerTag="Jobs"
-      headerTitle="Your curated job feed"
+      headerTitle="Open roles"
       sidebarHeader={<SidebarBrand />}
       sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedJobs.length} />}
       sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
@@ -1742,9 +1752,9 @@ function JobsPage({
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-5">
           <div className="min-w-0">
-            <CardTitle>Assigned for you</CardTitle>
+            <CardTitle>Open roles</CardTitle>
             <CardDescription>
-              Pulled from the public SimplifyJobs boards and stored on this Mac. Click a row to inspect it.
+              From the public SimplifyJobs boards, stored on this Mac. Click a row for detail.
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">

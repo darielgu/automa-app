@@ -2311,3 +2311,19 @@
 .desktop-toast__dismiss:hover {
   opacity: 1;
 }
+
+.onboarding-field__error {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #8c3a25;
+}
+
+.onboarding-field[data-invalid="true"] input,
+.onboarding-field[data-invalid="true"] .onboarding-select {
+  border-color: rgba(233, 123, 99, 0.6);
+}
+
+.onboarding-resume[data-dropping="true"] {
+  border-color: rgba(11, 16, 32, 0.4);
+  background: rgba(11, 16, 32, 0.05);
+}

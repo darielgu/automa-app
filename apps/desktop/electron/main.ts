@@ -1581,6 +1581,12 @@ function createWindow() {
     }
   });
 
+  // A file dropped anywhere outside the drop target would otherwise navigate
+  // the window to that file and blank the app.
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (url !== mainWindow?.webContents.getURL()) event.preventDefault();
+  });
+
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
     void mainWindow.loadURL(devUrl);
@@ -1788,6 +1794,18 @@ app.whenReady().then(() => {
     return state.config;
   });
   ipcMain.handle("desktop:pick-resume", () => pickResumeFile());
+  ipcMain.handle("desktop:set-resume-path", (_event, filePath: string) => {
+    const resolved = String(filePath ?? "");
+    const extension = path.extname(resolved).toLowerCase();
+    if (![".pdf", ".doc", ".docx", ".rtf", ".txt"].includes(extension)) {
+      throw new Error("That file type is not supported. Use PDF, DOC, DOCX, RTF or TXT.");
+    }
+    const resume = createResumeRecord(resolved);
+    const state = readState();
+    state.resume = resume;
+    writeState(state);
+    return resume;
+  });
   ipcMain.handle("desktop:parse-resume", () => parseCurrentResume());
   ipcMain.handle("desktop:open-external", async (_event, url: string) => {
     await shell.openExternal(url);

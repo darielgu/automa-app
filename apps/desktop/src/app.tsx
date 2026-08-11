@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { toastVariants } from "./lib/motion.js";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { duration, smoothSpring, stepVariants, swapVariants, toastVariants } from "./lib/motion.js";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -1076,7 +1076,15 @@ function OnboardingPage({
   onNotify: (toast: Omit<ToastItem, "id">) => void;
 }) {
   const navigate = useNavigate();
-  const [step, setStep] = useState<OnboardingStep>(0);
+  const [[step, direction], setStepState] = useState<[OnboardingStep, 1 | -1]>([0, 1]);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [phase, setPhase] = useState<"idle" | "saving" | "done">("idle");
+  const reducedMotion = useReducedMotion();
+
+  const goToStep = (next: OnboardingStep) =>
+    setStepState(([current]) => [next, next > current ? 1 : -1]);
+
+  const markTouched = (field: string) => setTouched((prev) => ({ ...prev, [field]: true }));
   const [profile, setProfile] = useState<UserProfileInput>(() => normalizeProfile(desktopState.onboarding));
   const [resume, setResume] = useState<DesktopResumeRecord | undefined>(desktopState.resume);
   const [busy, setBusy] = useState<null | "resume" | "save">(null);
@@ -1084,6 +1092,69 @@ function OnboardingPage({
 
   const setBasics = (patch: Partial<UserProfileInput["basics"]>) =>
     setProfile((prev) => ({ ...prev, basics: { ...prev.basics, ...patch } }));
+
+  const [dropping, setDropping] = useState(false);
+  const dragDepth = useRef(0);
+
+  const handleDragEnter = (event: React.DragEvent) => {
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDropping(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDropping(false);
+  };
+
+  const handleDrop = async (event: React.DragEvent) => {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDropping(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+
+    const bridgeWithFiles = desktopBridge as unknown as {
+      pathForDroppedFile?: (file: File) => string;
+      setResumePath?: (filePath: string) => Promise<DesktopResumeRecord>;
+    };
+    const filePath = bridgeWithFiles.pathForDroppedFile?.(file);
+    if (!filePath || !bridgeWithFiles.setResumePath) {
+      setError("Could not read that file. Use Choose file instead.");
+      return;
+    }
+
+    setBusy("resume");
+    setError(null);
+    try {
+      setResume(await bridgeWithFiles.setResumePath(filePath));
+      setTouched((prev) => ({ ...prev, resume: true }));
+      await parseResumeIntoProfile();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That file could not be attached.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Parsing pre-fills fields the user can correct; failure must never block. */
+  const parseResumeIntoProfile = async () => {
+    try {
+      const draft = await desktopBridge.parseResume();
+      if (draft?.profile) {
+        setProfile((prev) => mergeParsedProfile(prev, draft.profile));
+        if (draft.warnings?.length) {
+          onNotify({ tone: "neutral", message: `Resume read with warnings: ${draft.warnings[0]}` });
+        }
+      }
+    } catch {
+      onNotify({
+        tone: "neutral",
+        message: "Could not read the resume text. The file is attached; you can fill the fields yourself."
+      });
+    }
+  };
 
   const pickResume = async () => {
     setBusy("resume");
@@ -1116,18 +1187,61 @@ function OnboardingPage({
   };
 
   const finish = async () => {
+    const missing = missingForStep(2);
+    if (missing.length) {
+      setTouched((prev) => ({ ...prev, resume: true }));
+      return;
+    }
     setBusy("save");
+    setPhase("saving");
     setError(null);
     try {
       const saved = await desktopBridge.saveOnboarding(profile);
       setDesktopState((prev) => ({ ...prev, onboarding: (saved as UserProfileInput | undefined) ?? profile, resume }));
-      navigate("/jobs", { replace: true });
+      setPhase("done");
+      onNotify({ tone: "success", message: "Profile saved. Everything stays on this Mac." });
+      // A short beat so setup ends on a confirmation rather than a hard cut.
+      if (reducedMotion) {
+        navigate("/jobs", { replace: true });
+      } else {
+        window.setTimeout(() => navigate("/jobs", { replace: true }), 700);
+      }
     } catch (cause) {
+      setPhase("idle");
       setError(cause instanceof Error ? cause.message : "Could not save your profile.");
     } finally {
       setBusy(null);
     }
   };
+
+  const missingForStep = (target: OnboardingStep): string[] => {
+    if (target === 0) {
+      return [
+        !profile.basics.firstName.trim() && "firstName",
+        !profile.basics.lastName.trim() && "lastName",
+        !profile.basics.email.trim() && "email"
+      ].filter(Boolean) as string[];
+    }
+    if (target === 1) {
+      return !(profile.education.school || profile.education.university) ? ["school"] : [];
+    }
+    return !resume?.filePath ? ["resume"] : [];
+  };
+
+  const attemptContinue = () => {
+    const missing = missingForStep(step);
+    if (missing.length === 0) {
+      goToStep((step + 1) as OnboardingStep);
+      return;
+    }
+    // Show every problem at once and move focus to the first one, rather than
+    // greying out the button and leaving the user to guess.
+    setTouched((prev) => ({ ...prev, ...Object.fromEntries(missing.map((field) => [field, true])) }));
+    const first = document.getElementById(`onboarding-${missing[0]}`);
+    first?.focus();
+  };
+
+  const showError = (field: string) => touched[field] && missingForStep(step).includes(field);
 
   const stepValid = (() => {
     if (step === 0) return Boolean(profile.basics.firstName.trim() && profile.basics.lastName.trim() && profile.basics.email.trim());
@@ -1166,17 +1280,50 @@ function OnboardingPage({
             <CardTitle>{current.title}</CardTitle>
             <CardDescription>{current.hint}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 min-h-[19rem]">
+            <AnimatePresence mode="wait" custom={direction} initial={false}>
+              <motion.div
+                key={step}
+                custom={direction}
+                variants={reducedMotion ? swapVariants : stepVariants}
+                initial={reducedMotion ? "initial" : "enter"}
+                animate={reducedMotion ? "animate" : "center"}
+                exit="exit"
+                className="space-y-4"
+              >
             {step === 0 ? (
               <div className="onboarding-grid">
-                <OnboardingField label="First name" required>
-                  <Input value={profile.basics.firstName} onChange={(e) => setBasics({ firstName: e.target.value })} />
+                <OnboardingField label="First name" required error={showError("firstName") ? "Required" : undefined}>
+                  <Input
+                    id="onboarding-firstName"
+                    value={profile.basics.firstName}
+                    onChange={(e) => setBasics({ firstName: e.target.value })}
+                    onBlur={() => markTouched("firstName")}
+                    aria-invalid={showError("firstName") || undefined}
+                  />
                 </OnboardingField>
-                <OnboardingField label="Last name" required>
-                  <Input value={profile.basics.lastName} onChange={(e) => setBasics({ lastName: e.target.value })} />
+                <OnboardingField label="Last name" required error={showError("lastName") ? "Required" : undefined}>
+                  <Input
+                    id="onboarding-lastName"
+                    value={profile.basics.lastName}
+                    onChange={(e) => setBasics({ lastName: e.target.value })}
+                    onBlur={() => markTouched("lastName")}
+                    aria-invalid={showError("lastName") || undefined}
+                  />
                 </OnboardingField>
-                <OnboardingField label="Email" required>
-                  <Input type="email" value={profile.basics.email} onChange={(e) => setBasics({ email: e.target.value })} />
+                <OnboardingField
+                  label="Email"
+                  required
+                  error={showError("email") ? "Applications need somewhere to reply to." : undefined}
+                >
+                  <Input
+                    id="onboarding-email"
+                    type="email"
+                    value={profile.basics.email}
+                    onChange={(e) => setBasics({ email: e.target.value })}
+                    onBlur={() => markTouched("email")}
+                    aria-invalid={showError("email") || undefined}
+                  />
                 </OnboardingField>
                 <OnboardingField label="Phone">
                   <Input value={profile.basics.phone ?? ""} onChange={(e) => setBasics({ phone: e.target.value })} />
@@ -1219,7 +1366,7 @@ function OnboardingPage({
                     <option value="yes">Yes</option>
                   </select>
                 </OnboardingField>
-                <OnboardingField label="School" required>
+                <OnboardingField label="School" required error={showError("school") ? "Add the school on your resume. Applications ask for it constantly." : undefined}>
                   <Input
                     value={profile.education.school ?? ""}
                     onChange={(e) =>
@@ -1254,17 +1401,30 @@ function OnboardingPage({
 
             {step === 2 ? (
               <div className="space-y-4">
-                <div className="onboarding-resume">
+                <motion.div
+                  className="onboarding-resume"
+                  data-dropping={dropping ? "true" : undefined}
+                  animate={{ scale: dropping ? 1.01 : 1 }}
+                  transition={smoothSpring}
+                  onDragEnter={handleDragEnter}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   <div>
-                    <div className="onboarding-resume__name">{resume?.fileName ?? "No resume selected"}</div>
+                    <div className="onboarding-resume__name">
+                      {dropping ? "Drop to attach" : resume?.fileName ?? "No resume yet"}
+                    </div>
                     <div className="onboarding-resume__hint">
-                      {resume ? "Attached. This file is uploaded to each application." : "PDF, DOCX or TXT."}
+                      {resume
+                        ? "Attached. This file is uploaded with each application."
+                        : "Drag one here, or choose a file. PDF, DOCX or TXT."}
                     </div>
                   </div>
                   <Button variant="outline" onClick={pickResume} disabled={busy === "resume"}>
                     {busy === "resume" ? "Reading…" : resume ? "Choose another" : "Choose file"}
                   </Button>
-                </div>
+                </motion.div>
                 <OnboardingField label="Short summary" hint="Used when an application asks you to describe yourself.">
                   <Textarea
                     rows={4}
@@ -1275,26 +1435,58 @@ function OnboardingPage({
               </div>
             ) : null}
 
+              </motion.div>
+            </AnimatePresence>
+
             {error ? <div className="onboarding-error">{error}</div> : null}
           </CardContent>
           <CardFooter className="onboarding-footer">
             <Button
               variant="ghost"
-              onClick={() => setStep((prev) => (prev > 0 ? ((prev - 1) as OnboardingStep) : prev))}
+              onClick={() => goToStep((step > 0 ? step - 1 : step) as OnboardingStep)}
               disabled={step === 0 || busy !== null}
             >
               Back
             </Button>
             {step < 2 ? (
               <Button
-                onClick={() => setStep((prev) => ((prev + 1) as OnboardingStep))}
-                disabled={!stepValid || busy !== null}
+                onClick={attemptContinue}
+                disabled={busy !== null || phase === "done"}
               >
                 Continue
               </Button>
             ) : (
-              <Button onClick={finish} disabled={!stepValid || busy !== null}>
-                {busy === "save" ? "Saving…" : "Finish"}
+              <Button onClick={finish} disabled={busy !== null || phase === "done"}>
+                {/* Label crossfade borrowed from ConfirmCancelButton, so the
+                    two most important buttons in the app behave the same. */}
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={phase}
+                    className="inline-flex items-center gap-2"
+                    initial={{ opacity: 0, y: 3 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -3 }}
+                    transition={{ duration: 0.14 }}
+                  >
+                    {phase === "done" ? (
+                      <>
+                        <motion.span
+                          initial={{ scale: 0.6, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={smoothSpring}
+                          className="inline-flex"
+                        >
+                          <CheckCircle2 className="size-4" />
+                        </motion.span>
+                        Ready
+                      </>
+                    ) : phase === "saving" ? (
+                      "Saving…"
+                    ) : (
+                      "Finish"
+                    )}
+                  </motion.span>
+                </AnimatePresence>
               </Button>
             )}
           </CardFooter>
@@ -1309,21 +1501,39 @@ function OnboardingField({
   label,
   hint,
   required,
+  error,
   children
 }: {
   label: string;
   hint?: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="onboarding-field">
+    <label className="onboarding-field" data-invalid={error ? "true" : undefined}>
       <span className="onboarding-field__label">
         {label}
         {required ? <span className="onboarding-field__required" aria-hidden="true"> *</span> : null}
       </span>
       {children}
-      {hint ? <span className="onboarding-field__hint">{hint}</span> : null}
+      {/* No shake, no colour flash. A first-run form should tell you what it
+          needs, not scold you for not knowing. */}
+      <AnimatePresence initial={false}>
+        {error ? (
+          <motion.span
+            className="onboarding-field__error"
+            role="alert"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: duration.instant }}
+          >
+            {error}
+          </motion.span>
+        ) : null}
+      </AnimatePresence>
+      {hint && !error ? <span className="onboarding-field__hint">{hint}</span> : null}
     </label>
   );
 }

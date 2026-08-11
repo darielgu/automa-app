@@ -1,7 +1,7 @@
 // The single preload source. There used to be a .ts twin of this file that had
 // to be kept in sync by hand; it drifted, so it is gone. contextIsolation stays
 // on and nodeIntegration stays off: the renderer only ever sees this surface.
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 function subscribe(channel, listener) {
   const wrapped = (_event, payload) => listener(payload);
@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld("automaDesktop", {
   saveOnboarding: (profile) => ipcRenderer.invoke("desktop:save-onboarding", profile),
   saveConfig: (config) => ipcRenderer.invoke("desktop:save-config", config),
   pickResume: () => ipcRenderer.invoke("desktop:pick-resume"),
+  // File.path was removed in Electron 32, so a dropped file's real path can
+  // only be resolved here, in the preload.
+  pathForDroppedFile: (file) => webUtils.getPathForFile(file),
+  setResumePath: (filePath) => ipcRenderer.invoke("desktop:set-resume-path", filePath),
   parseResume: () => ipcRenderer.invoke("desktop:parse-resume"),
   getProfile: () => ipcRenderer.invoke("profile:get"),
   getSetting: (key) => ipcRenderer.invoke("settings:get", key),

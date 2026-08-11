@@ -23,8 +23,10 @@ jobs:
       - name: shared normalizer is in sync
         run: node tooling/scripts/sync-edge-shared.mjs --check
 
-      - run: npm run check
+      # Build first: `check` type-checks against the workspace packages'
+      # emitted declarations, which do not exist on a fresh clone.
       - run: npm run build
+      - run: npm run check
       - run: npm test
       - run: npm run test -w @automa/desktop
 

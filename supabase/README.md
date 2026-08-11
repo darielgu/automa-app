@@ -14,7 +14,7 @@ one downloading ~33 MB of JSON.
 |---|---|
 | `migrations/20260810000100_job_feed_schema.sql` | `job_listings`, `scrape_runs`, `scrape_source_state`, indexes, and RLS |
 | `migrations/20260810000200_job_feed_functions.sql` | Bulk upsert, ETag touch, removal sweep, and the public search function |
-| `migrations/20260810000300_job_feed_cron.sql` | Hourly `pg_cron` schedule, staggered per feed |
+| `migrations/20260810000500_job_feed_cron.sql` | Hourly `pg_cron` schedule, staggered per feed |
 | `functions/scrape-simplify/index.ts` | The Edge Function, one feed per invocation |
 | `functions/_shared/job-feed-core.ts` | Generated copy of the shared normalizer — do not edit |
 

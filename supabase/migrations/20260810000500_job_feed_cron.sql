@@ -1,5 +1,11 @@
 -- Hourly schedule for the scraper.
 --
+-- Numbered to sort last on purpose. This migration is the only one that starts
+-- doing work on its own, and it must not be applied until a manual trigger has
+-- proved the function secret and the Vault secret agree -- otherwise every
+-- scheduled run 401s and the failure has no symptom except a corpus that never
+-- updates.
+--
 -- Before running this, store three secrets in Vault. They are read at call time
 -- rather than inlined into cron.job.command, which is readable by any database
 -- owner:

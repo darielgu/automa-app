@@ -208,13 +208,13 @@ export interface ResumeAsset {
   createdAt: string;
 }
 
-export type DesktopAIProvider = "openai" | "automa_api" | "ollama" | "none";
+/** "automa_api" is gone: it named a server this project never had. */
+export type DesktopAIProvider = "openai" | "ollama" | "none";
 export type WorkerVisibility = "hidden" | "visible";
 export type WorkerSeedStatus = "ready" | "authorizing";
 export type RunAuthState = "ready" | "missing_seed" | "blocked_auth";
 
 export interface DesktopAutomationConfig {
-  apiBaseUrl: string;
   mode: "dry-run" | "auto-submit";
   headless: boolean;
   timeoutMs: number;
@@ -224,6 +224,13 @@ export interface DesktopAutomationConfig {
   automationPartition: string;
   aiProvider: DesktopAIProvider;
   openaiModel: string;
+  /**
+   * Whether a key is stored, not the key itself.
+   *
+   * The key lives encrypted in the local settings table and never travels to
+   * the renderer, so there is nothing for a compromised page to read back.
+   */
+  openaiApiKeySet: boolean;
   openaiApiKeyEnv: string;
   ollamaBaseUrl: string;
   maxParallelRuns: number;

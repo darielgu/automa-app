@@ -185,7 +185,11 @@ export class OpenAIProvider implements LlmProvider {
 
   constructor(config: AIConfig) {
     const envKey = config.openai?.apiKeyEnv ?? "OPENAI_API_KEY";
+    // A key entered in Settings wins. An .app launched from Finder inherits no
+    // shell environment, so the env vars below only ever reach a run started
+    // from a terminal.
     const apiKey =
+      config.openai?.apiKey?.trim() ||
       process.env[envKey] ||
       process.env.OPENAI_API_KEY ||
       process.env.OPEN_AI_KEY ||
@@ -193,7 +197,7 @@ export class OpenAIProvider implements LlmProvider {
 
     if (!apiKey) {
       throw new Error(
-        `Missing OpenAI API key. Checked: ${envKey}, OPENAI_API_KEY, OPEN_AI_KEY, OPENAI_KEY`
+        `Missing OpenAI API key. Add one in Settings, or set ${envKey}.`
       );
     }
 

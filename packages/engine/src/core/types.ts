@@ -293,22 +293,25 @@ export interface AshbyConfig {
   locationOneShotExtraRetry?: boolean;
 }
 
-export type AIProvider = "openai" | "ollama" | "automa_api" | "none";
+/**
+ * "automa_api" is deliberately absent. It was accepted here and never handled
+ * in AnswerEngine, so choosing it silently produced the same behaviour as
+ * "none" -- deterministic rules only, with the UI claiming an AI was answering.
+ */
+export type AIProvider = "openai" | "ollama" | "none";
 
 export interface AIConfig {
   provider: AIProvider;
   model: string;
   openai?: {
+    /** Read first. Held in the app's local settings, never on disk in plain view. */
+    apiKey?: string;
+    /** Fallback for terminal launches and CI. */
     apiKeyEnv: string;
     baseUrl?: string;
   };
   ollama?: {
     baseUrl: string;
-  };
-  automaApi?: {
-    baseUrl: string;
-    cookieHeader?: string;
-    authToken?: string;
   };
 }
 

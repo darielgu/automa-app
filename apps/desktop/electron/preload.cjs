@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld("automaDesktop", {
   // only be resolved here, in the preload.
   pathForDroppedFile: (file) => webUtils.getPathForFile(file),
   setResumePath: (filePath) => ipcRenderer.invoke("desktop:set-resume-path", filePath),
+  // The key crosses this bridge once, going in. It is never sent back.
+  setOpenAiKey: (key) => ipcRenderer.invoke("desktop:set-openai-key", key),
   parseResume: () => ipcRenderer.invoke("desktop:parse-resume"),
   getProfile: () => ipcRenderer.invoke("profile:get"),
   getSetting: (key) => ipcRenderer.invoke("settings:get", key),

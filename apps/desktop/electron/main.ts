@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { app, BrowserWindow, Notification, WebContentsView, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, Notification, WebContentsView, dialog, ipcMain, safeStorage, shell } from "electron";
 import type { OpenDialogOptions, Rectangle, Session } from "electron";
 import {
   detectPlatform,
@@ -342,8 +342,6 @@ let browserDrawerBounds: Rectangle | null = null;
 const cancellationRequests = new Set<string>();
 const workerSessions = new Map<string, ActiveWorkerSession>();
 const workerSlots = new Map<WorkerSlotId, WorkerSlot>();
-const runApiCookieHeaders = new Map<string, string>();
-const lastKnownApiCookieHeaders = new Map<string, string>();
 const runSurfaces = new Map<string, RunSurface>();
 let sharedHistoryWrite = Promise.resolve();
 let schedulerRunning = false;
@@ -422,7 +420,6 @@ function buildAutomationLandingUrl(slotId: WorkerSlotId) {
 function buildDefaultDesktopConfig(): DesktopAutomationConfig {
   const outputDir = path.join(app.getPath("userData"), "automation-output");
   return {
-    apiBaseUrl: process.env.AUTOMA_API_URL || "http://127.0.0.1:7461",
     mode: "auto-submit",
     headless: false,
     timeoutMs: 60000,
@@ -430,8 +427,9 @@ function buildDefaultDesktopConfig(): DesktopAutomationConfig {
     screenshotsDir: path.join(outputDir, "screenshots"),
     automationDebugPort: 0,
     automationPartition: EMBEDDED_AUTOMATION_PARTITION,
-    aiProvider: "automa_api",
+    aiProvider: "none",
     openaiModel: "gpt-4o-mini",
+    openaiApiKeySet: false,
     openaiApiKeyEnv: "OPENAI_API_KEY",
     ollamaBaseUrl: "http://localhost:11434",
     maxParallelRuns: 2,
@@ -439,8 +437,45 @@ function buildDefaultDesktopConfig(): DesktopAutomationConfig {
   };
 }
 
+/** Anything saved by an older build that named a provider we no longer have. */
+/**
+ * The OpenAI key, at rest.
+ *
+ * safeStorage encrypts against the login keychain, so the key is not sitting in
+ * plain text in a JSON file that any other program on the Mac can read. On a
+ * system where encryption is unavailable it is refused rather than quietly
+ * stored in the clear -- a key the user believes is protected and is not is
+ * worse than one they know to keep in an environment variable.
+ */
+function readOpenAiKey(): string {
+  const stored = getSetting(db(), "openai_api_key_enc");
+  if (!stored) return "";
+  if (!safeStorage.isEncryptionAvailable()) return "";
+  try {
+    return safeStorage.decryptString(Buffer.from(stored, "base64"));
+  } catch {
+    return "";
+  }
+}
+
+function writeOpenAiKey(key: string): void {
+  const trimmed = key.trim();
+  if (!trimmed) {
+    setSetting(db(), "openai_api_key_enc", "");
+    return;
+  }
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("This Mac cannot encrypt the key. Set OPENAI_API_KEY in your environment instead.");
+  }
+  setSetting(db(), "openai_api_key_enc", safeStorage.encryptString(trimmed).toString("base64"));
+}
+
+async function resolveRunOnboardingProfile(): Promise<UserProfileInput | undefined> {
+  return readState().onboarding;
+}
+
 function normalizeDesktopAiProvider(provider: DesktopAutomationConfig["aiProvider"]): DesktopAutomationConfig["aiProvider"] {
-  return provider === "none" ? "none" : "automa_api";
+  return provider === "openai" || provider === "ollama" ? provider : "none";
 }
 
 function buildDefaultSchedulerState() {
@@ -725,7 +760,6 @@ async function createFreshRunSurface(input: { runId: string; permitId: string; s
     }
     workerSessions.delete(runId);
     cancellationRequests.delete(runId);
-    runApiCookieHeaders.delete(runId);
     runSurfaces.delete(runId);
   });
 
@@ -924,15 +958,12 @@ function buildWorkerAutomationConfig(input: {
       provider: normalizeDesktopAiProvider(config.aiProvider),
       model: config.openaiModel,
       openai: {
+        apiKey: readOpenAiKey(),
         apiKeyEnv: config.openaiApiKeyEnv
       },
       ollama: {
         baseUrl: config.ollamaBaseUrl
       },
-      automaApi: {
-        baseUrl: config.apiBaseUrl,
-        cookieHeader: apiCookieHeader
-      }
     },
     browser: {
       cdpUrl: `http://127.0.0.1:${readDevToolsPort()}`,
@@ -973,96 +1004,6 @@ async function openAutomationBrowser(url?: string) {
 
 function closeAutomationBrowser() {
   hideAllRunSurfaces();
-}
-
-async function buildApiCookieHeaderForSession(session: Session | null | undefined, apiBaseUrl: string): Promise<string> {
-  if (!session) return "";
-  const cookies = await session.cookies.get({ url: apiBaseUrl }).catch(() => []);
-  const header = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
-  if (header.trim()) {
-    lastKnownApiCookieHeaders.set(apiBaseUrl, header);
-  }
-  return header;
-}
-
-async function buildApiCookieHeader(apiBaseUrl: string): Promise<string> {
-  return await buildApiCookieHeaderForSession(mainWindow?.webContents.session, apiBaseUrl);
-}
-
-async function desktopApiRequest<T>(input: {
-  apiBaseUrl: string;
-  path: string;
-  method?: "GET" | "POST" | "PATCH";
-  body?: unknown;
-  cookieHeader?: string;
-}): Promise<T> {
-  const endpoint = new URL(input.path, input.apiBaseUrl.endsWith("/") ? input.apiBaseUrl : `${input.apiBaseUrl}/`);
-  const headers = new Headers();
-  const suppliedCookieHeader = input.cookieHeader?.trim();
-  const cookieHeader =
-    suppliedCookieHeader
-    || await buildApiCookieHeader(endpoint.origin)
-    || lastKnownApiCookieHeaders.get(endpoint.origin)
-    || "";
-  if (cookieHeader?.trim()) {
-    headers.set("Cookie", cookieHeader);
-  }
-  if (input.body !== undefined) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(endpoint, {
-    method: input.method ?? (input.body === undefined ? "GET" : "POST"),
-    headers,
-    body: input.body === undefined ? undefined : JSON.stringify(input.body)
-  });
-
-  if (response.ok && input.method === "PATCH" && input.path.includes("/finalize")) {
-    console.log(JSON.stringify({
-      ts: new Date().toISOString(),
-      level: "info",
-      event: "desktop_finalize_sync_ok",
-      data: {
-        path: input.path,
-        status: response.status,
-        hasCookieHeader: Boolean(headers.get("Cookie"))
-      }
-    }));
-  }
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    if (input.path.includes("/finalize")) {
-      console.error("desktop_finalize_sync_failed", {
-        path: input.path,
-        status: response.status,
-        statusText: response.statusText,
-        hasCookieHeader: Boolean(headers.get("Cookie")),
-        cookieHeaderLength: headers.get("Cookie")?.length ?? 0,
-        detail
-      });
-    }
-    throw new DesktopApiError({
-      message: `Desktop API request failed (${response.status} ${response.statusText})`.trim(),
-      status: response.status,
-      statusText: response.statusText,
-      detail
-    });
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return await response.json() as T;
-}
-
-// There are no accounts, so there is nothing to authenticate. A run is allowed
-// to start when the local profile and resume exist; executeRun performs that
-// check and reports missing_profile / missing_resume, which the UI already
-// renders.
-async function resolveRunOnboardingProfile(): Promise<UserProfileInput | undefined> {
-  return readState().onboarding;
 }
 
 function emitRunCompleted(run: QueueEntry) {
@@ -1400,7 +1341,6 @@ async function executeRun(permit: SchedulerPermit) {
     hideAllRunSurfaces();
     workerSessions.delete(runId);
     cancellationRequests.delete(runId);
-    runApiCookieHeaders.delete(runId);
     destroyRunSurface(runId);
     void syncEmbeddedBrowserDrawer();
     releaseSchedulerPermitIdempotent(permit);
@@ -1794,6 +1734,19 @@ app.whenReady().then(() => {
     return state.config;
   });
   ipcMain.handle("desktop:pick-resume", () => pickResumeFile());
+  // Returns only what it changed. Returning the whole config would hand the
+  // renderer the copy on disk, silently discarding any other setting the user
+  // had edited but not yet saved -- including the provider they picked in order
+  // to reach this field.
+  ipcMain.handle("desktop:set-openai-key", async (_event, key: unknown) => {
+    if (typeof key !== "string") throw new Error("Invalid key.");
+    writeOpenAiKey(key);
+    const stored = Boolean(key.trim());
+    const state = readState();
+    state.config.openaiApiKeySet = stored;
+    writeState(state);
+    return { openaiApiKeySet: stored };
+  });
   ipcMain.handle("desktop:set-resume-path", (_event, filePath: string) => {
     const resolved = String(filePath ?? "");
     const extension = path.extname(resolved).toLowerCase();
@@ -1905,14 +1858,6 @@ app.whenReady().then(() => {
       target.finishedAt = new Date().toISOString();
       writeState(state);
       emitRunsUpdated();
-      await desktopApiRequest({
-        apiBaseUrl: state.config.apiBaseUrl,
-        path: `runs/${runId}/cancel`,
-        method: "POST",
-        cookieHeader: runApiCookieHeaders.get(runId)
-      }).catch((error) => {
-        console.error("Failed to sync run cancellation", error);
-      });
       emitRunCompleted(target);
       return;
     }

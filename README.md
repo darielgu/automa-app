@@ -18,8 +18,9 @@ machine. No account, no server, no telemetry.
   end.** Workday fills its My Information step; see the table below.
 - Records every run with the fields it filled and the evidence that it did or did
   not submit, then puts finished applications on a tracker board.
-- Ships a one-click demo profile and a built-in practice application, so you can
-  see the whole thing work before entering anything real.
+- Answers free-text questions with deterministic rules by default, so nothing
+  leaves your Mac. You can point it at a local Ollama model, or at OpenAI with
+  your own key, in Settings.
 
 ## Installing
 

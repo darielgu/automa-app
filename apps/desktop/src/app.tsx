@@ -70,7 +70,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip
 import type { DesktopAutomationConfig, DesktopBrowserDrawerBounds, DesktopResumeRecord, ResumeParseDraft } from "./desktop-types.js";
 import { cn } from "./lib/utils.js";
 
-const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 type DesktopState = {
   onboarding?: UserProfileInput;
@@ -99,7 +98,6 @@ type ToastItem = {
 
 function createFallbackConfig(): DesktopAutomationConfig {
   return {
-    apiBaseUrl: DEFAULT_API_BASE_URL,
     mode: "auto-submit",
     headless: false,
     timeoutMs: 60000,
@@ -107,8 +105,9 @@ function createFallbackConfig(): DesktopAutomationConfig {
     screenshotsDir: "",
     automationDebugPort: 9223,
     automationPartition: "persist:automa-automation",
-    aiProvider: "automa_api",
+    aiProvider: "none",
     openaiModel: "gpt-4o-mini",
+    openaiApiKeySet: false,
     openaiApiKeyEnv: "OPENAI_API_KEY",
     ollamaBaseUrl: "http://localhost:11434",
     maxParallelRuns: 2,
@@ -819,7 +818,7 @@ function useDesktopState() {
   return [state, setState, ready] as const;
 }
 
-function useAppliedJobs(apiBaseUrl: string, enabled: boolean) {
+function useAppliedJobs(enabled: boolean) {
   const [state, setState] = useState<AppliedJobsState>({
     appliedJobs: [],
     loading: enabled,
@@ -847,7 +846,7 @@ function useAppliedJobs(apiBaseUrl: string, enabled: boolean) {
         error: error instanceof Error ? error.message : "Unable to load applied jobs."
       });
     }
-  }, [apiBaseUrl, enabled]);
+  }, [enabled]);
 
   useEffect(() => {
     void refresh();
@@ -859,7 +858,7 @@ function useAppliedJobs(apiBaseUrl: string, enabled: boolean) {
   };
 }
 
-function useAppliedJobDetail(apiBaseUrl: string, appliedJobId: string | undefined, enabled: boolean) {
+function useAppliedJobDetail(appliedJobId: string | undefined, enabled: boolean) {
   const [state, setState] = useState<AppliedJobDetailState>({
     application: null,
     loading: enabled,
@@ -887,7 +886,7 @@ function useAppliedJobDetail(apiBaseUrl: string, appliedJobId: string | undefine
         error: error instanceof Error ? error.message : "Unable to load tracked application."
       });
     }
-  }, [apiBaseUrl, appliedJobId, enabled]);
+  }, [appliedJobId, enabled]);
 
   useEffect(() => {
     void refresh();
@@ -1644,7 +1643,6 @@ function persistRunFeedback(value: Record<string, RunFeedbackEntry>) {
 
 function JobsPage({
   runs,
-  apiBaseUrl,
   onboarding,
   appliedJobs,
   refreshToken,
@@ -1652,7 +1650,6 @@ function JobsPage({
   onNotify
 }: {
   runs: RunOutcome[];
-  apiBaseUrl: string;
   onboarding?: UserProfileInput;
   appliedJobs: AppliedJobRecord[];
   refreshToken: number;
@@ -2738,7 +2735,6 @@ function AppliedPage({
   appliedJobs,
   loading,
   error,
-  apiBaseUrl,
   refreshAppliedJobs,
   displayName,
   onNotify
@@ -2747,7 +2743,6 @@ function AppliedPage({
   appliedJobs: AppliedJobRecord[];
   loading: boolean;
   error: string | null;
-  apiBaseUrl: string;
   refreshAppliedJobs: () => Promise<void>;
   displayName?: string;
   onNotify: (toast: Omit<ToastItem, "id">) => void;
@@ -3015,13 +3010,11 @@ function AppliedPage({
 function ApplicationDetailPage({
   runs,
   appliedCount,
-  apiBaseUrl,
   displayName,
   onNotify
 }: {
   runs: RunOutcome[];
   appliedCount: number;
-  apiBaseUrl: string;
   displayName?: string;
   onNotify: (toast: Omit<ToastItem, "id">) => void;
 }) {
@@ -3032,7 +3025,7 @@ function ApplicationDetailPage({
     loading,
     error,
     refresh
-  } = useAppliedJobDetail(apiBaseUrl, appliedJobId, Boolean(appliedJobId));
+  } = useAppliedJobDetail(appliedJobId, Boolean(appliedJobId));
   const [insightsSummary, setInsightsSummary] = useState("");
   const [contactTargets, setContactTargets] = useState<ApplicationContactTarget[]>([]);
   const [messageDrafts, setMessageDrafts] = useState<ApplicationMessageDraft[]>([]);
@@ -3407,9 +3400,15 @@ function SettingsPage({
   const [parseBusy, setParseBusy] = useState(false);
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
+  /** The last config that came from disk, to tell "unchanged" from "edited". */
+  const configBaseline = useRef(desktopState.config);
 
+  // Only adopt the stored config while the form is clean. It arrives a beat
+  // after mount, and overwriting unconditionally discarded whatever the user
+  // had already changed in that window.
   useEffect(() => {
-    setConfig(desktopState.config);
+    setConfig((current) => (JSON.stringify(current) === JSON.stringify(configBaseline.current) ? desktopState.config : current));
+    configBaseline.current = desktopState.config;
   }, [desktopState.config]);
 
   const resumeRecord = desktopState.resume;
@@ -3587,6 +3586,30 @@ function SettingsPage({
       setMirrorError(cause instanceof Error ? cause.message : "The mirror could not be reached.");
     } finally {
       setMirrorBusy(false);
+    }
+  }
+
+  const [openAiKey, setOpenAiKey] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyMessage, setKeyMessage] = useState<string | null>(null);
+
+  async function saveOpenAiKey(key: string) {
+    setKeyBusy(true);
+    setKeyMessage(null);
+    try {
+      const bridgeWithKey = desktopBridge as unknown as {
+        setOpenAiKey?: (k: string) => Promise<{ openaiApiKeySet: boolean }>;
+      };
+      if (!bridgeWithKey.setOpenAiKey) throw new Error("Key storage is unavailable in this build.");
+      const { openaiApiKeySet } = await bridgeWithKey.setOpenAiKey(key);
+      setDesktopState((current) => ({ ...current, config: { ...current.config, openaiApiKeySet } }));
+      setConfig((current) => ({ ...current, openaiApiKeySet }));
+      setOpenAiKey("");
+      setKeyMessage(key.trim() ? "Key stored." : "Key removed.");
+    } catch (cause) {
+      setKeyMessage(cause instanceof Error ? cause.message : "The key could not be stored.");
+    } finally {
+      setKeyBusy(false);
     }
   }
 
@@ -3855,32 +3878,86 @@ function SettingsPage({
 
             <Card className="overflow-hidden">
               <CardHeader>
-                <CardTitle>AI routing</CardTitle>
-                <CardDescription>Choose which answer engine handles open-ended application questions.</CardDescription>
+                <CardTitle>Free-text answers</CardTitle>
+                <CardDescription>
+                  Applications sometimes ask a question no rule can answer. Choose what handles those.
+                </CardDescription>
               </CardHeader>
               <CardContent className="desktop-settings-form-grid">
                 <label className="desktop-field">
-                  <span className="desktop-field__label">AI provider</span>
-                  <select className="desktop-select" value={config.aiProvider} onChange={(event) => updateConfig("aiProvider", event.target.value as DesktopAutomationConfig["aiProvider"])}>
-                    <option value="automa_api">Automa API (server key)</option>
-                    <option value="none">None</option>
+                  <span className="desktop-field__label">Answer engine</span>
+                  <select
+                    className="desktop-select"
+                    value={config.aiProvider}
+                    onChange={(event) => updateConfig("aiProvider", event.target.value as DesktopAutomationConfig["aiProvider"])}
+                  >
+                    <option value="none">None — deterministic rules only</option>
+                    <option value="ollama">Ollama — a model running on this Mac</option>
+                    <option value="openai">OpenAI — your own API key</option>
                   </select>
                 </label>
+
                 {config.aiProvider === "none" ? (
                   <div className="desktop-settings-inline-note">
-                    AI is disabled. Runs will rely on deterministic rules and whatever profile data is already available.
+                    Runs use your profile, your resume and deterministic rules. Anything they cannot answer is left for
+                    you, and the run says so. Nothing is sent anywhere.
                   </div>
-                ) : (
+                ) : null}
+
+                {config.aiProvider === "ollama" ? (
                   <>
                     <div className="desktop-settings-inline-note">
-                      Answers are generated locally from your profile and resume. No key leaves this machine.
+                      Nothing leaves this Mac. Ollama has to be running already; Automa does not install or start it.
                     </div>
+                    <label className="desktop-field">
+                      <span className="desktop-field__label">Ollama URL</span>
+                      <Input value={config.ollamaBaseUrl} onChange={(event) => updateConfig("ollamaBaseUrl", event.target.value)} />
+                    </label>
                     <label className="desktop-field">
                       <span className="desktop-field__label">Model</span>
                       <Input value={config.openaiModel} onChange={(event) => updateConfig("openaiModel", event.target.value)} />
                     </label>
                   </>
-                )}
+                ) : null}
+
+                {config.aiProvider === "openai" ? (
+                  <>
+                    <div className="desktop-settings-inline-note">
+                      This is the one setting that sends anything off your Mac: the question, your profile and your
+                      resume text go to OpenAI to be answered. Questions about citizenship, sponsorship, disability,
+                      veteran status, race and gender are never sent, whatever is configured here.
+                    </div>
+                    <label className="desktop-field">
+                      <span className="desktop-field__label">
+                        API key {config.openaiApiKeySet ? "(a key is stored)" : ""}
+                      </span>
+                      <Input
+                        type="password"
+                        value={openAiKey}
+                        placeholder={config.openaiApiKeySet ? "Stored. Type to replace it." : "sk-..."}
+                        onChange={(event) => setOpenAiKey(event.target.value)}
+                      />
+                    </label>
+                    <div className="desktop-settings-inline-actions">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void saveOpenAiKey(openAiKey)} disabled={keyBusy || !openAiKey.trim()}>
+                        {keyBusy ? "Saving…" : "Save key"}
+                      </Button>
+                      {config.openaiApiKeySet ? (
+                        <Button type="button" variant="outline" size="sm" onClick={() => void saveOpenAiKey("")} disabled={keyBusy}>
+                          Remove stored key
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="desktop-settings-inline-note">
+                      The key is encrypted against your login keychain and never sent back to this screen.
+                    </div>
+                    {keyMessage ? <div className="desktop-settings-inline-note">{keyMessage}</div> : null}
+                    <label className="desktop-field">
+                      <span className="desktop-field__label">Model</span>
+                      <Input value={config.openaiModel} onChange={(event) => updateConfig("openaiModel", event.target.value)} />
+                    </label>
+                  </>
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -4003,10 +4080,6 @@ function SettingsPage({
                 </CardHeader>
                 <CardContent className="desktop-settings-form-grid">
                   <label className="desktop-field">
-                    <span className="desktop-field__label">API base URL</span>
-                    <Input value={config.apiBaseUrl} onChange={(event) => updateConfig("apiBaseUrl", event.target.value)} />
-                  </label>
-                  <label className="desktop-field">
                     <span className="desktop-field__label">OpenAI API env var</span>
                     <Input value={config.openaiApiKeyEnv} onChange={(event) => updateConfig("openaiApiKeyEnv", event.target.value)} />
                   </label>
@@ -4112,7 +4185,6 @@ function AppRoutes({
         element={
           <JobsPage
             runs={desktopState.runs}
-            apiBaseUrl={desktopState.config.apiBaseUrl}
             onboarding={desktopState.onboarding}
             appliedJobs={appliedJobs}
             refreshToken={jobsRefreshToken}
@@ -4131,7 +4203,6 @@ function AppRoutes({
             appliedJobs={appliedJobs}
             loading={appliedLoading}
             error={appliedError}
-            apiBaseUrl={desktopState.config.apiBaseUrl}
             refreshAppliedJobs={refreshAppliedJobs}
             displayName={displayName}
             onNotify={onNotify}
@@ -4144,7 +4215,6 @@ function AppRoutes({
           <ApplicationDetailPage
             runs={desktopState.runs}
             appliedCount={appliedJobs.length}
-            apiBaseUrl={desktopState.config.apiBaseUrl}
             displayName={displayName}
             onNotify={onNotify}
           />
@@ -4193,7 +4263,7 @@ export function App() {
     loading: appliedLoading,
     error: appliedError,
     refresh: refreshAppliedJobs
-  } = useAppliedJobs(desktopState.config.apiBaseUrl, Boolean(desktopState.onboarding));
+  } = useAppliedJobs(Boolean(desktopState.onboarding));
 
   const displayName =
     desktopState.onboarding?.basics?.fullName?.trim() ||

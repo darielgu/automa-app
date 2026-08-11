@@ -34,7 +34,7 @@ export interface FeedSyncResult {
  *
  * node:sqlite is synchronous, so upserting ~32,000 rows in one transaction
  * blocks the main process for seconds. That freezes the window and stalls any
- * IPC the user triggers in the meantime — a click on "Explore with a demo
+ * IPC the user triggers in the meantime — a click on "Get
  * profile" during the first sync would simply hang.
  */
 async function upsertJobsInChunks(db: Db, rows: NormalizedListing[], chunkSize = 2000): Promise<number> {

@@ -1,0 +1,75 @@
+# Pinned so a build is reproducible and Playwright's CDP client stays matched
+# to a known Chromium.
+electronVersion: 36.9.5
+
+appId: com.automa.desktop
+productName: Automa
+copyright: Copyright © 2026 Automa contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# The main process is bundled to a single CommonJS file, so nothing depends on
+# npm workspace symlinks being resolvable inside the asar at runtime.
+extraMetadata:
+  main: dist-electron/main.cjs
+
+files:
+  - dist/**/*
+  - dist-electron/main.cjs
+  - dist-electron/preload.cjs
+  - package.json
+  - "!**/*.map"
+
+extraResources:
+  - from: resources
+    to: resources
+    filter:
+      - "**/*"
+
+asar: true
+
+# There are no native modules: node:sqlite is inside Electron and the PDF
+# reader is pure JS. Nothing to rebuild, which is what makes a two-architecture
+# build from a single machine safe.
+npmRebuild: false
+buildDependenciesFromSource: false
+
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  # No Apple Developer ID exists for this project, so the app ships unsigned.
+  # The landing page and README explain the first-launch step this requires.
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  notarize: false
+  darkModeSupport: true
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # Stable names, so the download link on the site never needs updating.
+  artifactName: ${productName}-mac-${arch}.${ext}
+
+# electron-builder rewrites the binary, replaces the icon and injects app.asar
+# after Electron's own ad-hoc signature was applied, which invalidates it.
+# macOS on Apple Silicon refuses to run a binary with a broken signature, so the
+# app must be re-signed ad-hoc or it dies instantly with "is damaged".
+afterPack: build/after-pack-adhoc-sign.cjs
+
+dmg:
+  title: ${productName}
+  artifactName: ${productName}-mac-${arch}.${ext}
+  contents:
+    - x: 140
+      y: 180
+      type: file
+    - x: 400
+      y: 180
+      type: link
+      path: /Applications
+
+publish: null

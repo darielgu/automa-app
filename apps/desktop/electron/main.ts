@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, Notification, WebContentsView, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions, Rectangle, Session } from "electron";
 import {
@@ -133,9 +132,36 @@ const MAX_EMBEDDED_VIEW_DIMENSION = 8192;
 // app.getAppPath(). In a packaged app the `electron/` and `public/` source
 // directories are not shipped, so the old paths resolved to nothing and the
 // window came up with no preload and no icon.
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-const appRoot = path.resolve(moduleDir, "..", "..");
+// app.getAppPath() is the app directory in dev and the asar root once packaged.
+// Both contain dist/, so this is correct in either case. The earlier bug was
+// the subpaths, not this call.
+const appRoot = app.getAppPath();
 const rendererDir = path.join(appRoot, "dist");
+
+/**
+ * Bundled read-only files. electron-builder copies `resources/` next to the
+ * asar rather than inside it, so a packaged build must look at
+ * process.resourcesPath.
+ */
+/**
+ * The preload sits beside the compiled main process, whose location differs
+ * between the tsc dev output and the bundled production output. Deliberately
+ * not derived from import.meta.url: esbuild stubs that to undefined in a CJS
+ * bundle, which threw before the window was ever created.
+ */
+function resolvePreload(): string {
+  const candidates = [
+    path.join(appRoot, "dist-electron", "preload.cjs"),
+    path.join(appRoot, "dist-electron", "electron", "preload.cjs")
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!;
+}
+
+function resolveResource(...segments: string[]): string {
+  const packaged = path.join(process.resourcesPath || "", "resources", ...segments);
+  if (existsSync(packaged)) return packaged;
+  return path.join(appRoot, "resources", ...segments);
+}
 
 function resolveAsset(fileName: string): string {
   for (const candidate of [path.join(rendererDir, fileName), path.join(appRoot, "public", fileName)]) {
@@ -196,7 +222,7 @@ function emitRunEvent(runId: string, event: string, data?: unknown, level = "inf
 const DEMO_JOB_ID = "00000000-0000-4000-8000-00000000d3m0";
 
 function demoJobUrl(): string {
-  return `file://${path.join(appRoot, "resources", "demo", "greenhouse-demo.html")}`;
+  return `file://${resolveResource("demo", "greenhouse-demo.html")}`;
 }
 
 function seedDemoJob(): void {
@@ -1455,7 +1481,7 @@ async function closeRunBrowser(runId: string) {
 }
 
 function createWindow() {
-  const preloadPath = path.join(moduleDir, "preload.cjs");
+  const preloadPath = resolvePreload();
   const iconPath = resolveAsset("Automa.png");
   mainWindow = new BrowserWindow({
     width: 1420,

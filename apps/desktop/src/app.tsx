@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { duration, smoothSpring, stepVariants, swapVariants, toastVariants } from "./lib/motion.js";
+import { Skeleton } from "./components/ui/skeleton.js";
+import { duration, ease, smoothSpring, stepVariants, swapVariants, toastVariants } from "./lib/motion.js";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -789,6 +790,15 @@ function useDesktopState() {
     runs: [],
     config: createFallbackConfig()
   });
+  /**
+   * Whether the state on disk has been read yet.
+   *
+   * Without this the first paint has no onboarding record, which is
+   * indistinguishable from having never onboarded -- so every launch redirected
+   * to the setup screen and bounced back to Jobs a frame later. The flash was
+   * brief and looked like a bug because it was one.
+   */
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     void desktopBridge.getState().then((next) => {
@@ -799,13 +809,14 @@ function useDesktopState() {
         resume: loaded.resume,
         config: loaded.config ? { ...createFallbackConfig(), ...loaded.config } : createFallbackConfig()
       });
+      setReady(true);
     });
     return desktopBridge.onRunsUpdated((runs) => {
       setState((current) => ({ ...current, runs: runs as RunOutcome[] }));
     });
   }, []);
 
-  return [state, setState] as const;
+  return [state, setState, ready] as const;
 }
 
 function useAppliedJobs(apiBaseUrl: string, enabled: boolean) {
@@ -1398,6 +1409,7 @@ function OnboardingPage({
                 </OnboardingField>
                 <OnboardingField label="School" required error={showError("school") ? "Add the school on your resume. Applications ask for it constantly." : undefined}>
                   <Input
+                    id="onboarding-school"
                     value={profile.education.school ?? ""}
                     onChange={(e) =>
                       setProfile((prev) => ({ ...prev, education: { ...prev.education, school: e.target.value, university: e.target.value } }))
@@ -1836,6 +1848,30 @@ function JobsPage({
     }
   }
 
+  const [resyncing, setResyncing] = useState(false);
+
+  /** The empty state's next action: force a fetch and redraw from what lands. */
+  async function resyncJobs() {
+    setResyncing(true);
+    setJobsError(null);
+    try {
+      await bridge.syncJobs(true);
+      const page = await bridge.listJobs({ limit: 100, automatableOnly: false });
+      const nextJobs = page.jobs.map(toJobFeedItem);
+      setJobs(nextJobs);
+      setSupportById(Object.fromEntries(page.jobs.map((job) => [job.simplifyId, job.support])));
+      setJobFeedback(Object.fromEntries(nextJobs.map((job) => [job.id, job.feedback ?? null])));
+      onNotify({
+        tone: nextJobs.length ? "success" : "neutral",
+        message: nextJobs.length ? `${nextJobs.length} listings ready.` : "The feed returned nothing new."
+      });
+    } catch (error) {
+      setJobsError(error instanceof Error ? error.message : "The job feed could not be reached.");
+    } finally {
+      setResyncing(false);
+    }
+  }
+
   const visibleJobs = useMemo(() => jobs.filter((job) => !appliedIds.has(job.id)), [appliedIds, jobs]);
   const selectableJobs = useMemo(
     () => visibleJobs.filter((job) => !activeRunsByJobId.has(job.id) && !queueingJobIds[job.id]),
@@ -1991,7 +2027,19 @@ function JobsPage({
             </div>
           ) : !jobsLoading && visibleJobs.length === 0 ? (
             <div className="desktop-surface-state">
-              <div className="desktop-surface-state__copy">No queued jobs right now. New matches will land here and confirmed submissions move to Applied automatically.</div>
+              <div className="desktop-surface-state__copy">
+                {jobs.length === 0
+                  ? "No listings yet. Automa reads the public Simplify job lists; pull them now and they stay on this machine."
+                  : "You have applied to everything currently in the feed. New listings arrive as the source repositories are updated."}
+              </div>
+              <div className="desktop-surface-state__actions">
+                <Button onClick={() => void resyncJobs()} disabled={resyncing}>
+                  {resyncing ? "Checking for listings..." : jobs.length === 0 ? "Get listings" : "Check for new listings"}
+                </Button>
+                <Button variant="outline" onClick={() => navigate("/applied")}>
+                  See what you applied to
+                </Button>
+              </div>
             </div>
           ) : (
             <FixedHeaderFooterTable
@@ -2302,7 +2350,13 @@ function RunsPage({
         <CardContent className="desktop-runs-index">
           {sortedRuns.length === 0 ? (
             <div className="desktop-surface-state">
-              <div className="desktop-surface-state__copy">No runs yet. Queue a job from the jobs feed and it will appear here with a full receipt once automation finishes.</div>
+              <div className="desktop-surface-state__copy">
+                No runs yet. Queue a job and it appears here with a full receipt: every field Automa filled, the value it
+                used, and where that value came from.
+              </div>
+              <div className="desktop-surface-state__actions">
+                <Button onClick={() => navigate("/jobs")}>Pick a job to apply to</Button>
+              </div>
             </div>
           ) : (
             <FixedHeaderFooterTable
@@ -2810,9 +2864,9 @@ function AppliedPage({
                     <div className="desktop-applied-column__count">0</div>
                   </div>
                   <div className="desktop-applied-column__skeletons">
-                    <div className="desktop-applied-card-skeleton" />
-                    <div className="desktop-applied-card-skeleton" />
-                    <div className="desktop-applied-card-skeleton" />
+                    <Skeleton className="h-[8.8rem] w-full" />
+                    <Skeleton className="h-[8.8rem] w-full" />
+                    <Skeleton className="h-[8.8rem] w-full" />
                   </div>
                 </div>
               ))}
@@ -2823,7 +2877,13 @@ function AppliedPage({
             </div>
           ) : appliedJobs.length === 0 ? (
             <div className="desktop-surface-state">
-              <div className="desktop-surface-state__copy">No submitted applications tracked yet. Confirmed submissions will appear here automatically.</div>
+              <div className="desktop-surface-state__copy">
+                Nothing submitted yet. An application moves here on its own once Automa confirms the site accepted it, and
+                you can drag it through the stages from there.
+              </div>
+              <div className="desktop-surface-state__actions">
+                <Button onClick={() => navigate("/jobs")}>Find something to apply to</Button>
+              </div>
             </div>
           ) : (
             <div className="desktop-applied-board__columns">
@@ -3028,15 +3088,15 @@ function ApplicationDetailPage({
           <Card className="overflow-hidden">
             <CardHeader className="desktop-run-detail__hero">
               <div className="desktop-run-detail__hero-copy">
-                <div className="desktop-applied-detail__skeleton desktop-applied-detail__skeleton--title" />
-                <div className="desktop-applied-detail__skeleton desktop-applied-detail__skeleton--meta" />
+                <Skeleton className="h-6 w-[min(26rem,80%)]" />
+                <Skeleton className="h-4 w-[min(32rem,92%)]" />
               </div>
             </CardHeader>
             <CardContent className="desktop-run-detail__summary-grid">
-              <div className="desktop-applied-detail__skeleton desktop-applied-detail__skeleton--metric" />
-              <div className="desktop-applied-detail__skeleton desktop-applied-detail__skeleton--metric" />
-              <div className="desktop-applied-detail__skeleton desktop-applied-detail__skeleton--metric" />
-              <div className="desktop-applied-detail__skeleton desktop-applied-detail__skeleton--metric" />
+              <Skeleton className="h-[4.5rem] w-full" />
+              <Skeleton className="h-[4.5rem] w-full" />
+              <Skeleton className="h-[4.5rem] w-full" />
+              <Skeleton className="h-[4.5rem] w-full" />
             </CardContent>
           </Card>
         </div>
@@ -4014,7 +4074,7 @@ function SettingsPage({
   );
 }
 
-function ProtectedRoutes({
+function AppRoutes({
   displayName,
   desktopState,
   setDesktopState,
@@ -4099,8 +4159,32 @@ function ProtectedRoutes({
   );
 }
 
+/**
+ * What you see for the fraction of a second before the local state is read.
+ *
+ * Deliberately not a spinner. Reading one JSON file off an SSD takes a few
+ * milliseconds, so a spinner would appear and vanish faster than it can be
+ * recognised, which reads as a flicker. This holds the wordmark still and fades
+ * in only if the wait is long enough to notice.
+ */
+function BootScreen() {
+  return (
+    <div className="desktop-boot" role="status" aria-live="polite">
+      <motion.div
+        className="desktop-boot__mark"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: duration.base, ease: ease.out, delay: 0.25 }}
+      >
+        <span className="desktop-boot__word">Automa</span>
+        <span className="desktop-boot__hint">Opening your local workspace</span>
+      </motion.div>
+    </div>
+  );
+}
+
 export function App() {
-  const [desktopState, setDesktopState] = useDesktopState();
+  const [desktopState, setDesktopState, ready] = useDesktopState();
   const [jobsRefreshToken, setJobsRefreshToken] = useState(0);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const activeVisibleRun = useMemo(() => getActiveVisibleRun(desktopState.runs), [desktopState.runs]);
@@ -4179,13 +4263,15 @@ export function App() {
     });
   }, [refreshAppliedJobs]);
 
+  if (!ready) return <BootScreen />;
+
   return (
     <div className="desktop-app-shell">
       <Routes>
         <Route
           path="/*"
           element={
-            <ProtectedRoutes
+            <AppRoutes
               displayName={displayName}
               desktopState={desktopState}
               setDesktopState={setDesktopState}

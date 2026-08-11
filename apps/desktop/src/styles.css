@@ -1496,26 +1496,6 @@
   line-height: 1.7;
 }
 
-.desktop-surface-state__rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.desktop-surface-state__row {
-  height: 4.5rem;
-  border: 1px solid color-mix(in srgb, var(--border) 74%, white);
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--background) 95%, white) 0%,
-      color-mix(in srgb, var(--background) 86%, white) 50%,
-      color-mix(in srgb, var(--background) 95%, white) 100%
-    );
-  background-size: 200% 100%;
-  animation: desktop-surface-shimmer 1.35s linear infinite;
-}
-
 .desktop-applied-board__header {
   display: flex;
   flex-wrap: wrap;
@@ -1662,20 +1642,6 @@
   font-size: 0.82rem;
   text-align: center;
   line-height: 1.6;
-}
-
-.desktop-applied-card-skeleton {
-  height: 8.8rem;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, white);
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--background) 95%, white) 0%,
-      color-mix(in srgb, var(--background) 86%, white) 50%,
-      color-mix(in srgb, var(--background) 95%, white) 100%
-    );
-  background-size: 200% 100%;
-  animation: desktop-surface-shimmer 1.35s linear infinite;
 }
 
 .desktop-applied-card {
@@ -1954,32 +1920,7 @@
   justify-content: flex-end;
 }
 
-.desktop-applied-detail__skeleton {
-  border: 1px solid color-mix(in srgb, var(--border) 78%, white);
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--background) 95%, white) 0%,
-      color-mix(in srgb, var(--background) 86%, white) 50%,
-      color-mix(in srgb, var(--background) 95%, white) 100%
-    );
-  background-size: 200% 100%;
-  animation: desktop-surface-shimmer 1.35s linear infinite;
-}
 
-.desktop-applied-detail__skeleton--title {
-  width: min(26rem, 80%);
-  height: 1.5rem;
-}
-
-.desktop-applied-detail__skeleton--meta {
-  width: min(32rem, 92%);
-  height: 1rem;
-}
-
-.desktop-applied-detail__skeleton--metric {
-  min-height: 4.5rem;
-}
 
 .desktop-toast-stack {
   position: fixed;
@@ -2013,16 +1954,6 @@
 
 .desktop-toast--error {
   border-color: color-mix(in srgb, var(--destructive) 24%, var(--border));
-}
-
-@keyframes desktop-surface-shimmer {
-  from {
-    background-position: 200% 0;
-  }
-
-  to {
-    background-position: -200% 0;
-  }
 }
 
 @media (max-width: 900px) {
@@ -2333,4 +2264,39 @@
 .onboarding-resume[data-dropping="true"] {
   border-color: rgba(11, 16, 32, 0.4);
   background: rgba(11, 16, 32, 0.05);
+}
+
+/* First paint, before the local state file has been read. */
+.desktop-boot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--background);
+}
+
+.desktop-boot__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.desktop-boot__word {
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+.desktop-boot__hint {
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+/* An empty state should offer the next step, not just describe the absence. */
+.desktop-surface-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }

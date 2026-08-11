@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Data Analyst — Demo Application | Automa Demo Co (lever)</title>
+<style>
+  ul.application-fields { list-style: none; padding: 0; margin: 0; }
+  li.application-question { margin-bottom: 18px; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #171a24; max-width: 44rem; margin: 0 auto; padding: 40px 24px; background: #fcfbf8; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: rgba(23,26,36,0.62); margin-bottom: 24px; font-size: 14px; }
+  .banner { border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 12px 14px; font-size: 13px; margin-bottom: 24px; }
+  
+  .application-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .required::after { content: " ✱"; color: #e97b63; }
+  input[type=text], input[type=email], input[type=tel], input[type=url], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid rgba(11,16,32,0.18);
+    background: #fff; font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  textarea { min-height: 80px; }
+  #btn-submit { margin-top: 20px; padding: 10px 18px; background: #0b1020; color: #fff; border: 0; font-size: 14px; cursor: pointer; }
+  #confirmation { display: none; border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 24px; }
+  .error { color: #b3311a; font-size: 12px; display: none; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div id="form-view">
+  <h1>Data Analyst</h1>
+  <div class="sub">Automa Demo Co · Remote · Full-time</div>
+
+  <div class="banner">
+    <strong>Automa's built-in Lever practice application.</strong>
+    A local file, not a real posting. Nothing is submitted and no company
+    receives anything. It exists so the Lever adapter can be exercised safely.
+  </div>
+
+  <!-- Field names and the data-qa submit hook mirror Lever's real markup so the
+       actual Lever adapter drives this page. -->
+  <form id="application-form" class="application-form" method="post">
+    <ul class="application-fields">
+    <li class="application-question">
+      <label class="application-label required" for="name">Full name</label>
+      <input type="text" id="name" name="name" autocomplete="name" required />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label required" for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="email" required />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label" for="phone">Phone</label>
+      <input type="tel" id="phone" name="phone" autocomplete="tel" />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label" for="org">Current company</label>
+      <input type="text" id="org" name="org" />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label" for="urls[LinkedIn]">LinkedIn URL</label>
+      <input type="url" id="urls[LinkedIn]" name="urls[LinkedIn]" />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label" for="urls[GitHub]">GitHub URL</label>
+      <input type="url" id="urls[GitHub]" name="urls[GitHub]" />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label required" for="resume">Resume</label>
+      <input type="file" id="resume" name="resume" required />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label required" for="cards[work_auth][field0]">
+        Are you legally authorized to work in the United States?
+      </label>
+      <select id="cards[work_auth][field0]" name="cards[work_auth][field0]" required>
+        <option value="">Select…</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </li>
+
+    <li class="application-question">
+      <label class="application-label required" for="cards[sponsorship][field0]">
+        Will you now or in the future require visa sponsorship?
+      </label>
+      <select id="cards[sponsorship][field0]" name="cards[sponsorship][field0]" required>
+        <option value="">Select…</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </li>
+
+    <li class="application-question">
+      <label class="application-label" for="cards[experience][field0]">
+        How many years of professional experience do you have?
+      </label>
+      <input type="text" id="cards[experience][field0]" name="cards[experience][field0]" />
+    </li>
+
+    <li class="application-question">
+      <label class="application-label" for="comments">
+        Any other details you'd like to share?
+      </label>
+      <textarea id="comments" name="comments"></textarea>
+    </li>
+
+    </ul>
+    <div class="error" id="form-error">Please complete every required field.</div>
+    <button type="submit" id="btn-submit" data-qa="btn-submit">Submit application</button>
+  </form>
+</div>
+
+<div id="confirmation">
+  <h1>Application submitted</h1>
+  <p>Thank you for applying to Automa Demo Co. Your application has been received.</p>
+  <p class="sub">Nothing left this machine. This confirmation comes from a local demo file.</p>
+</div>
+
+<script>
+  document.getElementById("application-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var ids = ["name", "email", "cards[work_auth][field0]", "cards[sponsorship][field0]"];
+    var missing = ids.filter(function (id) { return !document.getElementById(id).value; });
+    var resume = document.getElementById("resume");
+    if (missing.length || !resume.files.length) {
+      document.getElementById("form-error").style.display = "block";
+      return;
+    }
+    document.getElementById("form-view").style.display = "none";
+    document.getElementById("confirmation").style.display = "block";
+    document.title = "Application submitted | Automa Demo Co";
+  });
+</script>
+</body>
+</html>

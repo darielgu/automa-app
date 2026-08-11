@@ -1,5 +1,5 @@
 import type { NormalizedListing } from "@automa/job-feed-core";
-import { AUTOMATABLE_PLATFORMS } from "@automa/job-feed-core";
+import { AUTOMATABLE_PLATFORMS, platformSupport, type AtsPlatform, type PlatformSupport } from "@automa/job-feed-core";
 import { jsonParse, plainAll, transaction, type Db } from "./database.js";
 
 export interface JobRecord {
@@ -21,6 +21,8 @@ export interface JobRecord {
   datePosted: number | null;
   feedback: "liked" | "hidden" | "saved" | null;
   applied: boolean;
+  /** How far this platform's adapter has actually been proven. */
+  support: PlatformSupport;
 }
 
 export interface JobQuery {
@@ -82,7 +84,8 @@ function toRecord(row: JobRow): JobRecord {
     active: row.feed_active === 1,
     datePosted: row.date_posted,
     feedback: (row.verdict as JobRecord["feedback"]) ?? null,
-    applied: Boolean(row.applied_id)
+    applied: Boolean(row.applied_id),
+    support: platformSupport(row.ats_platform as AtsPlatform)
   };
 }
 

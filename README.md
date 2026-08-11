@@ -14,8 +14,9 @@ machine. No account, no server, no telemetry.
   new-grad boards — about 33,000 listings — into a local database you can search
   instantly, online or off.
 - Drives a real browser inside the app window and fills the application while you
-  watch. Purpose-built adapters for **Greenhouse, Lever, Ashby, Workday and Work
-  at a Startup**.
+  watch. **Greenhouse is verified end to end.** Adapters for Lever, Ashby,
+  Workday and Work at a Startup exist and reach the form, but are experimental
+  (see below).
 - Records every run with the fields it filled and the evidence that it did or did
   not submit, then puts finished applications on a tracker board.
 - Ships a one-click demo profile and a built-in practice application, so you can
@@ -45,9 +46,22 @@ shasum -a 256 ~/Downloads/Automa-mac-arm64.dmg
 ## How honest is it?
 
 About **59% of currently active listings** are on an ATS with a purpose-built
-adapter. The rest are company career sites, where the generic adapter fills what
-it can and often needs you to finish. The app labels this per job rather than
-implying one click is always enough.
+adapter. Having an adapter is not the same as it working, so the app grades every
+job:
+
+| Platform | State | What is actually proven |
+|---|---|---|
+| Greenhouse | **Verified** | Fills the whole form including the resume upload, then stops before submit |
+| Lever | Experimental | Reaches and scans the form; field discovery incomplete |
+| Ashby | Experimental | Extracts every field; writing them back does not verify |
+| Workday | Experimental | Reaches the application step; extraction incomplete |
+| Work at a Startup | Experimental | Does not yet open the message dialog |
+| Everything else | Generic | Fills what it can; you finish |
+
+Each platform ships with a practice application inside the app, built from that
+platform's real markup, so you can see exactly what its adapter does before
+pointing it at a real posting. Those practice pages are also how the table above
+was measured — run them yourself from the Jobs screen in demo mode.
 
 Automa also will not claim a submission it cannot prove. It reports "confirmed"
 only on real evidence — a confirmation page, a success URL, or the form

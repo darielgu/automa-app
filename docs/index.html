@@ -17,7 +17,8 @@
     <p class="lede">
       A macOS app that fills out job applications on your own machine. It reads the
       public internship and new-grad job boards, and drives a real browser through
-      Greenhouse, Lever, Ashby, Workday and Work at a Startup forms while you watch.
+      the application form while you watch. Greenhouse is fully supported today;
+      Lever, Ashby, Workday and Work at a Startup are still experimental.
     </p>
 
     <p class="badges">
@@ -83,9 +84,10 @@
       <div class="feature">
         <h3>Fills the application</h3>
         <p>
-          Drives a real browser inside the app window. You watch every field being
-          filled. Purpose-built support for Greenhouse, Lever, Ashby, Workday and
-          Work at a Startup.
+          Drives a real browser inside the app window, so you watch every field
+          being filled. Greenhouse applications are filled end to end. Adapters
+          for Lever, Ashby, Workday and Work at a Startup exist and open the
+          form, but are not yet proven to complete it.
         </p>
       </div>
       <div class="feature">
@@ -125,10 +127,18 @@
     <h2>How honest is the automation?</h2>
     <p class="prose">
       About <strong>59% of currently active listings</strong> are on an applicant
-      tracking system Automa has a purpose-built adapter for. The rest are company
-      career sites, where a generic adapter fills what it can and often needs you
-      to finish. The app labels this on every job rather than implying one click
-      is always enough.
+      tracking system Automa has a purpose-built adapter for. But "has an adapter"
+      is not the same as "works", so the app grades every job honestly:
+    </p>
+    <ul class="plain">
+      <li><strong>Greenhouse — verified.</strong> Filled end to end, including the resume upload, against a practice application built from Greenhouse's own markup.</li>
+      <li><strong>Lever, Ashby, Workday, Work at a Startup — experimental.</strong> The adapters reach the form and each gets part of the way, but none is yet proven to fill one completely. The app says so on every listing, and a run that fills nothing is reported as a failure, not a success.</li>
+      <li><strong>Everything else — generic.</strong> Company career sites, where Automa fills what it can and you finish.</li>
+    </ul>
+    <p class="prose">
+      That is the current, measured state rather than a roadmap. Every platform
+      ships with a practice application in the app, so you can see for yourself
+      what each adapter does before pointing it at a real posting.
     </p>
     <p class="prose">
       Automa also refuses to claim success it cannot prove. A submission is only

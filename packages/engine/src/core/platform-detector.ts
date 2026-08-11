@@ -23,6 +23,14 @@ export function hasGreenhouseUrlSignals(url: string): boolean {
 export function detectPlatform(url: string): Platform {
   const normalized = url.toLowerCase();
 
+  // Automa's bundled practice applications. Each uses its platform's real
+  // markup so the genuine adapter drives it; a demo that ran through a
+  // special-case path would prove nothing.
+  if (normalized.includes("lever-demo.html")) return "lever";
+  if (normalized.includes("ashby-demo.html")) return "ashby";
+  if (normalized.includes("workatastartup-demo.html")) return "workatastartup";
+  if (normalized.includes("workday-demo.html")) return "workday";
+
   if (hasGreenhouseUrlSignals(url)) return "greenhouse";
   if (normalized.includes("lever.co")) return "lever";
   if (normalized.includes("myworkdayjobs.com") || normalized.includes("workday")) return "workday";

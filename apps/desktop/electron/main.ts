@@ -219,39 +219,54 @@ function emitRunEvent(runId: string, event: string, data?: unknown, level = "inf
  * automation really works: a fictional persona pointed at a real posting would
  * send junk to a real company.
  */
-const DEMO_JOB_ID = "00000000-0000-4000-8000-00000000d3m0";
+/**
+ * The bundled practice applications, one per supported ATS.
+ *
+ * Guest mode needs somewhere safe to prove the automation works: a fictional
+ * persona pointed at real postings would send junk to real companies. Each
+ * page uses its platform's real markup, so the genuine adapter drives it.
+ */
+const DEMO_JOBS = [
+  { id: "00000000-0000-4000-8000-00000000d3m0", file: "greenhouse-demo.html",     platform: "greenhouse",     title: "Software Engineer (practice application)" },
+  { id: "00000000-0000-4000-8000-00000000d3m1", file: "lever-demo.html",          platform: "lever",          title: "Data Analyst (practice application)" },
+  { id: "00000000-0000-4000-8000-00000000d3m2", file: "ashby-demo.html",          platform: "ashby",          title: "Product Engineer (practice application)" },
+  { id: "00000000-0000-4000-8000-00000000d3m3", file: "workday-demo.html",        platform: "workday",        title: "Field Engineer (practice application)" },
+  { id: "00000000-0000-4000-8000-00000000d3m4", file: "workatastartup-demo.html", platform: "workatastartup", title: "Founding Engineer (practice application)" }
+] as const;
 
-function demoJobUrl(): string {
-  return `file://${resolveResource("demo", "greenhouse-demo.html")}`;
-}
+const DEMO_JOB_ID = DEMO_JOBS[0].id;
 
-function seedDemoJob(): void {
-  const url = demoJobUrl();
-  upsertJobs(db(), [
-    {
-      simplify_id: DEMO_JOB_ID,
-      source_repos: ["demo"],
-      company_name: "Automa Demo Co",
-      company_url: null,
-      title: "Software Engineer (built-in demo application)",
-      url,
-      dedupe_key: url,
-      apply_host: "localhost",
-      ats_platform: "greenhouse",
-      category: "Software Engineering",
-      locations: ["Remote"],
-      terms: ["Demo"],
-      degrees: [],
-      sponsorship: null,
-      source: "automa-demo",
-      feed_active: true,
-      is_visible: true,
-      date_posted: Math.floor(Date.now() / 1000),
-      date_updated: Math.floor(Date.now() / 1000),
-      content_hash: "demo",
-      flags: ["demo"]
-    }
-  ]);
+function seedDemoJobs(): void {
+  const now = Math.floor(Date.now() / 1000);
+  upsertJobs(
+    db(),
+    DEMO_JOBS.map((demo) => {
+      const url = `file://${resolveResource("demo", demo.file)}`;
+      return {
+        simplify_id: demo.id,
+        source_repos: ["demo"],
+        company_name: "Automa Demo Co",
+        company_url: null,
+        title: demo.title,
+        url,
+        dedupe_key: url,
+        apply_host: "localhost",
+        ats_platform: demo.platform,
+        category: "Practice",
+        locations: ["Remote"],
+        terms: ["Practice"],
+        degrees: [],
+        sponsorship: null,
+        source: "automa-demo",
+        feed_active: true,
+        is_visible: true,
+        date_posted: now,
+        date_updated: now,
+        content_hash: `demo-${demo.platform}`,
+        flags: ["demo"]
+      };
+    })
+  );
 }
 
 /** Puts a finished run on the tracker board. */
@@ -1683,7 +1698,7 @@ app.whenReady().then(() => {
       previousEmployers: GUEST_PERSONA.previousEmployers ?? [],
       isDemo: true
     });
-    seedDemoJob();
+    seedDemoJobs();
     setSetting(db(), "guest_mode", "1");
     setSetting(db(), "onboarding_completed", "1");
 
@@ -1692,7 +1707,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("desktop:is-guest", () => getSetting(db(), "guest_mode") === "1");
   ipcMain.handle("desktop:seed-demo-job", () => {
-    seedDemoJob();
+    seedDemoJobs();
     return getJob(db(), DEMO_JOB_ID);
   });
   ipcMain.handle("runs:events", (_event, runId: string, afterId?: number) =>

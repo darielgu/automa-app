@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Founding Engineer — Demo Application | Automa Demo Co (workatastartup)</title>
+<style>
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #171a24; max-width: 42rem; margin: 0 auto; padding: 40px 24px; background: #fcfbf8; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: rgba(23,26,36,0.62); margin-bottom: 24px; font-size: 14px; }
+  .banner { border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 12px 14px; font-size: 13px; margin-bottom: 24px; }
+  label { display: block; font-size: 13px; font-weight: 500; margin: 16px 0 6px; }
+  textarea { width: 100%; min-height: 130px; padding: 8px 10px; border: 1px solid rgba(11,16,32,0.18); background: #fff; font-size: 14px; font-family: inherit; box-sizing: border-box; }
+  button { margin-top: 18px; padding: 10px 18px; background: #0b1020; color: #fff; border: 0; font-size: 14px; cursor: pointer; }
+  #application-dialog { border: 1px solid rgba(11,16,32,0.18); background: #fff; padding: 20px; }
+  #confirmation { display: none; border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 24px; }
+  .warn { color: #b3311a; font-size: 12px; display: none; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div id="form-view">
+  <h1>Founding Engineer</h1>
+  <div class="sub">Automa Demo Co (YC demo) · Remote</div>
+
+  <div class="banner">
+    <strong>Automa's built-in Work at a Startup practice application.</strong>
+    A local file, not a real posting. Nothing is submitted.
+  </div>
+
+  <!-- Work at a Startup applications are a single free-text message behind an
+       Apply button, which is the flow the adapter drives. -->
+  <div id="listing">
+    <p>We are looking for an engineer who likes owning problems end to end.</p>
+    <button id="apply-button" type="button">Apply</button>
+  </div>
+
+  <div id="application-dialog" role="dialog" aria-modal="true" style="display:none">
+   <h2>Reach out to Sam, the founder</h2>
+   <form id="application-form">
+    <label for="message">Why are you interested in this role?</label>
+    <textarea id="message" name="message" placeholder="Tell us a bit about yourself"></textarea>
+    <div class="warn" id="short-warning">Please write at least 100 characters.</div>
+    <button type="submit" id="send-application">Send</button>
+   </form>
+  </div>
+</div>
+
+<div id="confirmation">
+  <h1>Application submitted</h1>
+  <p>Thanks for applying to Automa Demo Co. Your application has been received.</p>
+  <p class="sub">Nothing left this machine.</p>
+</div>
+
+<script>
+  document.getElementById("apply-button").addEventListener("click", function () {
+    document.getElementById("listing").style.display = "none";
+    document.getElementById("application-dialog").style.display = "block";
+  });
+  document.getElementById("application-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var message = document.getElementById("message").value || "";
+    if (message.trim().length < 100) {
+      document.getElementById("short-warning").style.display = "block";
+      return;
+    }
+    document.getElementById("form-view").style.display = "none";
+    document.getElementById("confirmation").style.display = "block";
+    document.title = "Application submitted | Automa Demo Co";
+  });
+</script>
+</body>
+</html>

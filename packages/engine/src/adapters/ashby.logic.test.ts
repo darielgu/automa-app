@@ -15,7 +15,7 @@ import {
   ashbyHasBotChallengeIndicators,
   ashbyHasConfirmationText,
   ashbySampleDelayMs,
-  ashbyUrlMatchesSuccess, stripAshbyEmbedParam } from "./ashby.js";
+  ashbyUrlMatchesSuccess, stripAshbyEmbedParam, mergeAshbyDetectedFields } from "./ashby.js";
 import type { CandidateProfile } from "../core/types.js";
 
 test("ashbyHasConfirmationText matches common confirmation copy variants", () => {
@@ -2287,4 +2287,30 @@ test("ashby urls without an embed parameter are left untouched", () => {
   const url = "https://jobs.ashbyhq.com/acme/abc/application";
   assert.equal(stripAshbyEmbedParam(url), url);
   assert.equal(stripAshbyEmbedParam("not-a-url"), "not-a-url");
+});
+
+test("ashby field merge keeps the richer generic result", () => {
+  // The Ashby-specific detector understands widgets the generic pass cannot,
+  // but it under-detects: on a ten-field form it returned only one checkbox
+  // group. Returning early on any non-empty result dropped the rest of the
+  // form, so a run could report success having filled almost nothing.
+  const generic = [
+    { id: "g1", label: "Name", type: "text", required: true, selector: "#name", tag: "input" },
+    { id: "g2", label: "Email", type: "text", required: true, selector: "#email", tag: "input" }
+  ] as never[];
+  const ashbySpecific = [
+    { id: "a1", label: "Which locations?", type: "multi_select", required: false, selector: "#loc", tag: "input" }
+  ] as never[];
+
+  const merged = mergeAshbyDetectedFields(generic, ashbySpecific);
+  assert.equal(merged.length, 3, "widgets only the Ashby detector sees must survive");
+  assert.deepEqual(merged.map((f) => f.label), ["Name", "Email", "Which locations?"]);
+});
+
+test("ashby field merge does not duplicate the same control", () => {
+  const field = { id: "x", label: "Email", type: "text", required: true, selector: "#email", tag: "input" } as never;
+  const other = { id: "y", label: "  email  ", type: "text", required: true, selector: "#email2", tag: "input" } as never;
+  const merged = mergeAshbyDetectedFields([field], [other]);
+  assert.equal(merged.length, 1, "same label and type is the same control");
+  assert.equal(merged[0]?.id, "x", "the generic entry wins");
 });

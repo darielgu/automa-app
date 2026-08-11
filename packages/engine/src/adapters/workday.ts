@@ -1137,6 +1137,16 @@ async function ensureWorkdayAuthOrApplicationReadyDirect(
   account: { email: string; password: string },
   notes?: string[]
 ): Promise<{ ok: boolean; accountCreated: boolean; usedExistingAccount: boolean; reason?: string; step?: WorkdayStep }> {
+  // Probe before demanding credentials. The application may already be open —
+  // because the tenant does not require an account, or because the user is
+  // still signed in from an earlier run in the persistent browser session.
+  // Refusing up front meant Automa declined work it could actually do.
+  const preAuthProbe = await probeWorkdayReadyState(page).catch(() => null);
+  if (preAuthProbe?.state === "application_step") {
+    notes?.push(`workday_auth_skipped:already_on_application_step:step=${preAuthProbe.step}`);
+    return { ok: true, accountCreated: false, usedExistingAccount: true, step: preAuthProbe.step };
+  }
+
   if (!account.email || !account.password) {
     return { ok: false, accountCreated: false, usedExistingAccount: false, reason: "missing_account_credentials" };
   }

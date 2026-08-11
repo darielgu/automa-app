@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Product Engineer — Demo Application | Automa Demo Co (ashby)</title>
+<style>
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #171a24; max-width: 44rem; margin: 0 auto; padding: 40px 24px; background: #fcfbf8; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: rgba(23,26,36,0.62); margin-bottom: 24px; font-size: 14px; }
+  .banner { border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 12px 14px; font-size: 13px; margin-bottom: 24px; }
+  .ashby-application-form-field-entry, fieldset { margin: 0 0 18px; padding: 0; border: 0; }
+  .ashby-application-form-question-title { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .required::after { content: " *"; color: #e97b63; }
+  input[type=text], input[type=email], input[type=tel], input[type=date], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid rgba(11,16,32,0.18);
+    background: #fff; font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  textarea { min-height: 80px; }
+  button[type=submit] { margin-top: 20px; padding: 10px 18px; background: #0b1020; color: #fff; border: 0; font-size: 14px; cursor: pointer; }
+  #confirmation { display: none; border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 24px; }
+  .error { color: #b3311a; font-size: 12px; display: none; margin-top: 6px; }
+  .option-row { margin: 4px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div id="form-view">
+  <h1>Product Engineer</h1>
+  <div class="sub">Automa Demo Co · Remote · Full-time</div>
+
+  <div class="banner">
+    <strong>Automa's built-in Ashby practice application.</strong>
+    A local file, not a real posting. Nothing is submitted and no company
+    receives anything.
+  </div>
+
+  <!-- data-field-path, .ashby-application-form-field-entry and
+       .ashby-application-form-question-title mirror Ashby's real markup, which
+       is what the Ashby adapter keys off. -->
+  <form class="ashby-application-form" id="application-form">
+    <div class="ashby-application-form-field-entry" data-field-path="_systemfield_name">
+      <label class="ashby-application-form-question-title required" for="_systemfield_name">Name</label>
+      <input type="text" id="_systemfield_name" name="_systemfield_name" required />
+    </div>
+
+    <div class="ashby-application-form-field-entry" data-field-path="_systemfield_email">
+      <label class="ashby-application-form-question-title required" for="_systemfield_email">Email</label>
+      <input type="email" id="_systemfield_email" name="_systemfield_email" required />
+    </div>
+
+    <div class="ashby-application-form-field-entry" data-field-path="_systemfield_phone">
+      <label class="ashby-application-form-question-title" for="_systemfield_phone">Phone</label>
+      <input type="tel" id="_systemfield_phone" name="_systemfield_phone" />
+    </div>
+
+    <div class="ashby-application-form-field-entry" data-field-path="_systemfield_resume">
+      <label class="ashby-application-form-question-title required" for="_systemfield_resume">Resume</label>
+      <input type="file" id="_systemfield_resume" name="_systemfield_resume" required />
+    </div>
+
+    <div class="ashby-application-form-field-entry" data-field-path="_systemfield_linkedin">
+      <label class="ashby-application-form-question-title" for="_systemfield_linkedin">LinkedIn</label>
+      <input type="text" id="_systemfield_linkedin" name="_systemfield_linkedin" />
+    </div>
+
+    <div class="ashby-application-form-field-entry" data-field-path="work_authorization">
+      <label class="ashby-application-form-question-title required" for="work_authorization">
+        Are you legally authorized to work in the United States?
+      </label>
+      <select id="work_authorization" name="work_authorization" required>
+        <option value="">Select…</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </div>
+
+    <div class="ashby-application-form-field-entry" data-field-path="sponsorship">
+      <label class="ashby-application-form-question-title required" for="sponsorship">
+        Will you now or in the future require sponsorship?
+      </label>
+      <select id="sponsorship" name="sponsorship" required>
+        <option value="">Select…</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </div>
+
+    <div class="ashby-application-form-field-entry" data-field-path="start_date">
+      <label class="ashby-application-form-question-title" for="start_date">Earliest start date</label>
+      <input type="date" id="start_date" name="start_date" />
+    </div>
+
+    <!-- A checkbox fieldset, the shape that previously tripped the extractor
+         on a real Back Market posting. -->
+    <fieldset class="ashby-application-form-field-entry" data-field-path="locations">
+      <legend class="ashby-application-form-question-title">Which locations would you work from?</legend>
+      <div class="option-row"><label><input type="checkbox" name="Remote" /> Remote</label></div>
+      <div class="option-row"><label><input type="checkbox" name="Austin, TX" /> Austin, TX</label></div>
+      <div class="option-row"><label><input type="checkbox" name="New York, NY" /> New York, NY</label></div>
+    </fieldset>
+
+    <div class="ashby-application-form-field-entry" data-field-path="why">
+      <label class="ashby-application-form-question-title" for="why">Why do you want to work here?</label>
+      <textarea id="why" name="why"></textarea>
+    </div>
+
+    <div class="error" id="form-error">Missing entry for a required field.</div>
+    <button type="submit" id="submit-application">Submit Application</button>
+  </form>
+</div>
+
+<div id="confirmation">
+  <h1>Application submitted</h1>
+  <p>Thanks for applying to Automa Demo Co. Your application has been received.</p>
+  <p class="sub">Nothing left this machine.</p>
+</div>
+
+<script>
+  document.getElementById("application-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var ids = ["_systemfield_name", "_systemfield_email", "work_authorization", "sponsorship"];
+    var missing = ids.filter(function (id) { return !document.getElementById(id).value; });
+    var resume = document.getElementById("_systemfield_resume");
+    if (missing.length || !resume.files.length) {
+      document.getElementById("form-error").style.display = "block";
+      return;
+    }
+    document.getElementById("form-view").style.display = "none";
+    document.getElementById("confirmation").style.display = "block";
+    document.title = "Application submitted | Automa Demo Co";
+  });
+</script>
+</body>
+</html>

@@ -62,7 +62,7 @@ export type AtsPlatform =
   | "generic"
   | "unknown";
 
-/** Platforms an adapter can actually drive end to end. */
+/** Platforms that have a purpose-built adapter, as opposed to the generic one. */
 export const AUTOMATABLE_PLATFORMS: readonly AtsPlatform[] = [
   "greenhouse",
   "lever",
@@ -70,6 +70,40 @@ export const AUTOMATABLE_PLATFORMS: readonly AtsPlatform[] = [
   "ashby",
   "workatastartup"
 ] as const;
+
+/**
+ * Platforms proven end to end: the adapter navigates, fills every field it
+ * should, and stops where it should. Verified against the bundled practice
+ * application for that platform, which uses the platform's real markup.
+ */
+export const VERIFIED_PLATFORMS: readonly AtsPlatform[] = ["greenhouse"] as const;
+
+/**
+ * Platforms whose adapter exists and reaches the form, but which are not yet
+ * proven to fill it end to end. Being explicit about this matters more than
+ * looking capable: a user who believes an application was filled when it was
+ * not is worse off than one who was told to check.
+ *
+ * Current state, measured against the bundled practice applications:
+ *  - lever:          reaches and scans the form; field discovery incomplete
+ *  - ashby:          extracts all fields; writing them back does not verify
+ *  - workday:        reaches the application step; extraction incomplete
+ *  - workatastartup: does not yet open the message dialog
+ */
+export const EXPERIMENTAL_PLATFORMS: readonly AtsPlatform[] = [
+  "lever",
+  "ashby",
+  "workday",
+  "workatastartup"
+] as const;
+
+export type PlatformSupport = "verified" | "experimental" | "generic";
+
+export function platformSupport(platform: AtsPlatform): PlatformSupport {
+  if (VERIFIED_PLATFORMS.includes(platform)) return "verified";
+  if (EXPERIMENTAL_PLATFORMS.includes(platform)) return "experimental";
+  return "generic";
+}
 
 export function isAutomatable(platform: AtsPlatform): boolean {
   return AUTOMATABLE_PLATFORMS.includes(platform);

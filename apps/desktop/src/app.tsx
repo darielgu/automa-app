@@ -515,6 +515,7 @@ interface LocalJobRecord {
   datePosted: number | null;
   feedback: "liked" | "hidden" | "saved" | null;
   applied: boolean;
+  support: "verified" | "experimental" | "generic";
 }
 
 interface LocalAppliedRecord {
@@ -574,9 +575,16 @@ function toJobFeedItem(job: LocalJobRecord): JobFeedItem {
     // Say plainly whether an adapter can drive this one. About 40% of listings
     // are company career sites where the generic adapter often needs a human,
     // and implying otherwise would set the wrong expectation.
-    summary: job.automatable
-      ? `Automa can fill this ${formatProviderLabel(job.platform)} application.`
-      : "Company career site. Automa will fill what it can, but you may need to finish it.",
+    // Say exactly what is known about this platform. Overstating it would let a
+    // user believe an application was filled when it was not.
+    summary: (() => {
+      const label = formatProviderLabel(job.platform);
+      if (job.support === "verified") return `Automa fills ${label} applications end to end.`;
+      if (job.support === "experimental") {
+        return `${label} support is experimental. Automa opens the form and fills what it can — check it before you rely on it.`;
+      }
+      return "Company career site. Automa will fill what it can, but you will probably need to finish it.";
+    })(),
     compensation: job.sponsorship ?? undefined,
     roleTags: tags.slice(0, 6),
     feedReason: "role_match",

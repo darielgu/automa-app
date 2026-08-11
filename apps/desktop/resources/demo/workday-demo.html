@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Field Engineer — Demo Application | Automa Demo Co (workday)</title>
+<style>
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #171a24; max-width: 44rem; margin: 0 auto; padding: 40px 24px; background: #fcfbf8; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: rgba(23,26,36,0.62); margin-bottom: 24px; font-size: 14px; }
+  .banner { border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 12px 14px; font-size: 13px; margin-bottom: 24px; }
+  [data-automation-id^="formField-"] { margin-bottom: 18px; }
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .required::after { content: " *"; color: #e97b63; }
+  input[type=text], input[type=email], input[type=tel], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid rgba(11,16,32,0.18);
+    background: #fff; font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  button { margin-top: 20px; padding: 10px 18px; background: #0b1020; color: #fff; border: 0; font-size: 14px; cursor: pointer; }
+  #confirmation { display: none; border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 24px; }
+  .error { color: #b3311a; font-size: 12px; display: none; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div id="form-view">
+  <h1>Field Engineer</h1>
+  <div class="sub">Automa Demo Co · Austin, TX · Full-time</div>
+
+  <div class="banner">
+    <strong>Automa's built-in Workday practice application.</strong>
+    A local file, not a real posting. Real Workday postings require an account
+    on the employer's tenant; this page exercises the form-filling stage only.
+  </div>
+
+  <!-- data-automation-id attributes mirror Workday's real markup, which is what
+       the Workday adapter keys off. -->
+  <div data-automation-id="applyManually">
+    <form id="application-form">
+      <div data-automation-id="formField-legalNameSection_firstName">
+        <label data-automation-id="formLabel" class="required" for="firstName">First Name</label>
+        <input type="text" id="firstName" name="firstName" data-automation-id="legalNameSection_firstName" required />
+      </div>
+
+      <div data-automation-id="formField-legalNameSection_lastName">
+        <label data-automation-id="formLabel" class="required" for="lastName">Last Name</label>
+        <input type="text" id="lastName" name="lastName" data-automation-id="legalNameSection_lastName" required />
+      </div>
+
+      <div data-automation-id="formField-email">
+        <label data-automation-id="formLabel" class="required" for="email">Email Address</label>
+        <input type="email" id="email" name="email" data-automation-id="email" required />
+      </div>
+
+      <div data-automation-id="formField-phone-number">
+        <label data-automation-id="formLabel" for="phone">Phone Number</label>
+        <input type="tel" id="phone" name="phone" data-automation-id="phone-number" />
+      </div>
+
+      <div data-automation-id="formField-addressSection_city">
+        <label data-automation-id="formLabel" for="city">City</label>
+        <input type="text" id="city" name="city" data-automation-id="addressSection_city" />
+      </div>
+
+      <div data-automation-id="formField-resume">
+        <label data-automation-id="formLabel" class="required" for="resume">Resume/CV</label>
+        <input type="file" id="resume" name="resume" data-automation-id="resume" required />
+      </div>
+
+      <div data-automation-id="formField-workAuth">
+        <label data-automation-id="formLabel" class="required" for="workAuth">
+          Are you legally eligible to work in the country to which you are applying?
+        </label>
+        <select id="workAuth" name="workAuth" data-automation-id="workAuth" required>
+          <option value="">Select One</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+
+      <div data-automation-id="formField-sponsorship">
+        <label data-automation-id="formLabel" class="required" for="sponsorship">
+          Will you now or in the future require sponsorship for employment visa status?
+        </label>
+        <select id="sponsorship" name="sponsorship" data-automation-id="sponsorship" required>
+          <option value="">Select One</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+
+      <div data-automation-id="formField-source">
+        <label data-automation-id="formLabel" for="source">How Did You Hear About Us?</label>
+        <select id="source" name="source" data-automation-id="source">
+          <option value="">Select One</option>
+          <option value="Company website">Company website</option>
+          <option value="LinkedIn">LinkedIn</option>
+          <option value="Referral">Referral</option>
+        </select>
+      </div>
+
+      <div class="error" id="form-error">Please complete every required field.</div>
+      <button type="submit" data-automation-id="pageFooterNextButton">Submit</button>
+    </form>
+  </div>
+</div>
+
+<div id="confirmation" data-automation-id="applicationSubmitted">
+  <h1>Application submitted</h1>
+  <p>Thank you for applying to Automa Demo Co. Your application has been received.</p>
+  <p class="sub">Nothing left this machine.</p>
+</div>
+
+<script>
+  document.getElementById("application-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var ids = ["firstName", "lastName", "email", "workAuth", "sponsorship"];
+    var missing = ids.filter(function (id) { return !document.getElementById(id).value; });
+    var resume = document.getElementById("resume");
+    if (missing.length || !resume.files.length) {
+      document.getElementById("form-error").style.display = "block";
+      return;
+    }
+    document.getElementById("form-view").style.display = "none";
+    document.getElementById("confirmation").style.display = "block";
+    document.title = "Application submitted | Automa Demo Co";
+  });
+</script>
+</body>
+</html>

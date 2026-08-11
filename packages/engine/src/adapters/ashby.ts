@@ -588,6 +588,31 @@ export function ashbyHasBotChallengeIndicators(
  * in the form the extractor scans, so an embed URL yields a run that reports
  * "filled" having filled nothing.
  */
+/**
+ * Combines the generic and Ashby-specific field lists, preferring the generic
+ * entry when both describe the same control. Fields are matched on label plus
+ * type, since the two detectors generate different synthetic ids.
+ */
+export function mergeAshbyDetectedFields(
+  generic: DetectedField[],
+  ashbySpecific: DetectedField[]
+): DetectedField[] {
+  const keyOf = (field: DetectedField): string =>
+    `${String(field.label || "").replace(/\s+/g, " ").trim().toLowerCase()}::${field.type}`;
+
+  const merged: DetectedField[] = [...generic];
+  const seen = new Set(generic.map(keyOf));
+
+  for (const field of ashbySpecific) {
+    const key = keyOf(field);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(field);
+  }
+
+  return merged;
+}
+
 export function stripAshbyEmbedParam(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl);
@@ -603,7 +628,8 @@ export class AshbyAdapter extends BaseAdapter {
   readonly platform = "ashby" as const;
 
   canHandle(url: string): boolean {
-    return url.toLowerCase().includes("ashbyhq.com");
+    const normalized = url.toLowerCase();
+    return normalized.includes("ashbyhq.com") || normalized.includes("ashby-demo.html");
   }
 
   private buildFixtureCaptureDir(company: string | undefined, url: string): string {
@@ -9906,18 +9932,40 @@ export class AshbyAdapter extends BaseAdapter {
     const extractionTimeoutMs = Math.max(3_000, ashbyConfig.extractFieldTimeoutMs ?? 9_000);
     const retries = Math.max(0, ashbyConfig.extractRetryCount ?? 1);
 
+    // The Ashby-specific detector understands widgets the generic extractor
+    // cannot, but it also under-detects: on a form with ten data-field-path
+    // blocks it returned only the one checkbox group. Returning early on any
+    // non-empty result therefore silently dropped most of the form, which is
+    // how a run could report "filled" having filled almost nothing.
+    //
+    // Run both and keep the richer result, merging anything the Ashby detector
+    // found that the generic pass missed.
     const hybridFields = await this.detectAshbyFieldsFallback(scope).catch(() => [] as DetectedField[]);
-    if (hybridFields.length > 0) {
-      return hybridFields;
-    }
 
+    let genericFields: DetectedField[] = [];
     let lastErrorMessage = "unknown";
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
-        return await this.withTimeout(extractVisibleFields(scope), extractionTimeoutMs, "ashby_extract_fields_timeout");
+        genericFields = await this.withTimeout(
+          extractVisibleFields(scope),
+          extractionTimeoutMs,
+          "ashby_extract_fields_timeout"
+        );
+        break;
       } catch (error) {
         lastErrorMessage = error instanceof Error ? error.message : String(error);
       }
+    }
+
+    if (genericFields.length || hybridFields.length) {
+      const merged = mergeAshbyDetectedFields(genericFields, hybridFields);
+      logger.info("ashby_extract_fields_merged", {
+        url,
+        genericCount: genericFields.length,
+        ashbySpecificCount: hybridFields.length,
+        mergedCount: merged.length
+      });
+      return merged;
     }
 
     logger.warn("ashby_extract_fields_failed", {

@@ -299,3 +299,15 @@ export function countJobs(db: Db): { total: number; active: number; automatable:
     .get(...AUTOMATABLE_PLATFORMS) as { n: number };
   return { total: Number(total?.n ?? 0), active: Number(active?.n ?? 0), automatable: Number(automatable?.n ?? 0) };
 }
+
+/**
+ * Removes every job that came from a given source.
+ *
+ * Used to clear the practice applications left behind by the retired demo
+ * mode, which would otherwise sit in a real user's feed forever.
+ */
+export function deleteJobsBySource(db: Db, source: string): number {
+  const before = countJobs(db).total;
+  db.prepare("DELETE FROM jobs WHERE source = ?").run(source);
+  return before - countJobs(db).total;
+}

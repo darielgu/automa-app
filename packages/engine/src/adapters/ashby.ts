@@ -629,7 +629,7 @@ export class AshbyAdapter extends BaseAdapter {
 
   canHandle(url: string): boolean {
     const normalized = url.toLowerCase();
-    return normalized.includes("ashbyhq.com") || normalized.includes("ashby-demo.html");
+    return normalized.includes("ashbyhq.com") || normalized.includes("ashby-practice.html");
   }
 
   private buildFixtureCaptureDir(company: string | undefined, url: string): string {

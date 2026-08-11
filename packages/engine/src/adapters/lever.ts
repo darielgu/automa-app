@@ -667,7 +667,7 @@ export class LeverAdapter extends BaseAdapter {
 
   canHandle(url: string): boolean {
     const normalized = url.toLowerCase();
-    return normalized.includes("lever.co") || normalized.includes("lever-demo.html");
+    return normalized.includes("lever.co") || normalized.includes("lever-practice.html");
   }
 
   async apply(context: AdapterRunContext): Promise<JobRunResult> {

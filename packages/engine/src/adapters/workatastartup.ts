@@ -140,7 +140,7 @@ export class WorkAtAStartupAdapter extends BaseAdapter {
 
   canHandle(url: string): boolean {
     const normalized = url.toLowerCase();
-    return normalized.includes("workatastartup.com") || normalized.includes("workatastartup-demo.html");
+    return normalized.includes("workatastartup.com") || normalized.includes("workatastartup-practice.html");
   }
 
   async apply(context: AdapterRunContext) {

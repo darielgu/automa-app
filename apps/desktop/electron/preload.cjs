@@ -20,10 +20,6 @@ contextBridge.exposeInMainWorld("automaDesktop", {
   getSetting: (key) => ipcRenderer.invoke("settings:get", key),
   setSetting: (key, value) => ipcRenderer.invoke("settings:set", key, value),
 
-  // ---- guest mode ----
-  startGuest: () => ipcRenderer.invoke("desktop:start-guest"),
-  isGuest: () => ipcRenderer.invoke("desktop:is-guest"),
-
   // ---- job feed ----
   listJobs: (query) => ipcRenderer.invoke("jobs:list", query),
   getJob: (jobId) => ipcRenderer.invoke("jobs:get", jobId),

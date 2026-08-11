@@ -44,6 +44,6 @@ test("lever resolves controls whose id contains brackets", async () => {
 
 test("lever recognises its bundled practice application", () => {
   const adapter = new LeverAdapter();
-  assert.equal(adapter.canHandle("file:///x/resources/demo/lever-demo.html"), true);
+  assert.equal(adapter.canHandle("file:///x/resources/practice/lever-practice.html"), true);
   assert.equal(adapter.canHandle("https://boards.greenhouse.io/acme/jobs/1"), false);
 });

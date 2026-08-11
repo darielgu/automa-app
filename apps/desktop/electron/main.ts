@@ -21,14 +21,12 @@ import type {
 import type { DesktopBrowserDrawerBounds, DesktopResumeRecord, ResumeParseDraft } from "../src/desktop-types.js";
 import { createResumeRecord, parseResumeRecord } from "./resume.js";
 import { openDatabase, type Db } from "./db/database.js";
-import { GUEST_DEMOGRAPHICS, GUEST_PERSONA, guestResumeText } from "./guest-persona.js";
-import { generateGuestResume } from "./guest-resume.js";
 import {
   appendRunEvent, getProfile, listApplied, listRunEvents, listStageEvents,
   moveAppliedStage, saveProfile, setAppliedNotes, upsertAppliedJob, getSetting,
   setSetting, type TrackerStage
 } from "./db/app-repo.js";
-import { getJob, jobFacets, queryJobs, setJobFeedback, upsertJobs, type JobQuery } from "./db/jobs-repo.js";
+import { deleteJobsBySource, getJob, jobFacets, queryJobs, setJobFeedback, upsertJobs, type JobQuery } from "./db/jobs-repo.js";
 import { feedStatus, syncJobFeed } from "./job-feed/sync.js";
 
 type QueueEntry = RunOutcome & {
@@ -220,53 +218,93 @@ function emitRunEvent(runId: string, event: string, data?: unknown, level = "inf
  * send junk to a real company.
  */
 /**
- * The bundled practice applications, one per supported ATS.
+ * Bundled practice applications, used only by the adapter test harness.
  *
- * Guest mode needs somewhere safe to prove the automation works: a fictional
- * persona pointed at real postings would send junk to real companies. Each
- * page uses its platform's real markup, so the genuine adapter drives it.
+ * These are the only end-to-end proof that every adapter works inside the
+ * embedded browser surface, which is where four real bugs hid: a background
+ * view reports every element as invisible, so anything depending on visibility
+ * silently did nothing. A standalone Chromium run cannot reproduce that.
+ *
+ * They are NOT a product feature. Seeding is gated on AUTOMA_DEV_PRACTICE,
+ * which shipped builds never set, so they are unreachable in a real install.
  */
-const DEMO_JOBS = [
-  { id: "00000000-0000-4000-8000-00000000d3m0", file: "greenhouse-demo.html",     platform: "greenhouse",     title: "Software Engineer — practice" },
-  { id: "00000000-0000-4000-8000-00000000d3m1", file: "lever-demo.html",          platform: "lever",          title: "Data Analyst — practice" },
-  { id: "00000000-0000-4000-8000-00000000d3m2", file: "ashby-demo.html",          platform: "ashby",          title: "Product Engineer — practice" },
-  { id: "00000000-0000-4000-8000-00000000d3m3", file: "workday-demo.html",        platform: "workday",        title: "Field Engineer — practice" },
-  { id: "00000000-0000-4000-8000-00000000d3m4", file: "workatastartup-demo.html", platform: "workatastartup", title: "Founding Engineer — practice" }
+const PRACTICE_JOBS = [
+  { id: "00000000-0000-4000-8000-00000000d3m0", file: "greenhouse-practice.html",     platform: "greenhouse",     title: "Software Engineer — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m1", file: "lever-practice.html",          platform: "lever",          title: "Data Analyst — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m2", file: "ashby-practice.html",          platform: "ashby",          title: "Product Engineer — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m3", file: "workday-practice.html",        platform: "workday",        title: "Field Engineer — practice" },
+  { id: "00000000-0000-4000-8000-00000000d3m4", file: "workatastartup-practice.html", platform: "workatastartup", title: "Founding Engineer — practice" }
 ] as const;
 
-const DEMO_JOB_ID = DEMO_JOBS[0].id;
+export function practiceModeEnabled(): boolean {
+  return process.env.AUTOMA_DEV_PRACTICE === "1";
+}
 
-function seedDemoJobs(): void {
+
+function seedPracticeJobs(): void {
+  if (!practiceModeEnabled()) return;
   const now = Math.floor(Date.now() / 1000);
   upsertJobs(
     db(),
-    DEMO_JOBS.map((demo) => {
-      const url = `file://${resolveResource("demo", demo.file)}`;
+    PRACTICE_JOBS.map((practice) => {
+      const url = `file://${resolveResource("practice", practice.file)}`;
       return {
-        simplify_id: demo.id,
-        source_repos: ["demo"],
-        company_name: "Automa Demo Co",
+        simplify_id: practice.id,
+        source_repos: ["practice"],
+        company_name: "Automa Practice Co",
         company_url: null,
-        title: demo.title,
+        title: practice.title,
         url,
         dedupe_key: url,
         apply_host: "localhost",
-        ats_platform: demo.platform,
+        ats_platform: practice.platform,
         category: "Practice",
         locations: ["Remote"],
         terms: ["Practice"],
         degrees: [],
         sponsorship: null,
-        source: "automa-demo",
+        source: "automa-practice",
         feed_active: true,
         is_visible: true,
         date_posted: now,
         date_updated: now,
-        content_hash: `demo-${demo.platform}`,
-        flags: ["demo"]
+        content_hash: `practice-${practice.platform}`,
+        flags: ["practice"]
       };
     })
   );
+}
+
+/**
+ * Frees anyone who used the retired demo mode.
+ *
+ * Demo mode wrote a fictional persona and a generated resume into the same
+ * fields real onboarding uses, and forced dry-run. With the demo path deleted,
+ * the first-run gate sees a profile and a resume present and never redirects —
+ * so that user would be permanently stuck as a fictional candidate, in
+ * dry-run, with five practice jobs in their feed and no route back.
+ *
+ * Clearing the profile drops them into the real first-run flow, which is what
+ * they would have got had demo mode never existed.
+ */
+function migrateAwayFromDemoMode(): void {
+  try {
+    if (getSetting(db(), "guest_mode") !== "1") return;
+
+    const state = readState();
+    state.onboarding = undefined;
+    state.resume = undefined;
+    state.config = { ...state.config, mode: "auto-submit" };
+    writeState(state);
+
+    const removed = deleteJobsBySource(db(), "automa-demo");
+    setSetting(db(), "guest_mode", "0");
+    setSetting(db(), "onboarding_completed", "0");
+    console.log(`Cleared retired demo mode; removed ${removed} practice jobs.`);
+  } catch (error) {
+    // A failed migration must not stop the app from opening.
+    console.error("Could not clear demo mode state", error);
+  }
 }
 
 /** Puts a finished run on the tracker board. */
@@ -1638,6 +1676,10 @@ app.whenReady().then(() => {
     app.dock.setIcon(dockIconPath);
   }
   createWindow();
+  migrateAwayFromDemoMode();
+  // No-op unless AUTOMA_DEV_PRACTICE=1. Seeding here as well as after
+  // onboarding means the harness can run against a pre-seeded state file.
+  seedPracticeJobs();
   recoverRunsOnStartup();
 
   // Keep the job feed fresh from the main process rather than letting a screen
@@ -1695,54 +1737,6 @@ app.whenReady().then(() => {
     return true;
   });
 
-  // ---- guest mode --------------------------------------------------------
-  ipcMain.handle("desktop:start-guest", async () => {
-    const state = readState();
-    const resume = await generateGuestResume();
-
-    state.onboarding = GUEST_PERSONA;
-    state.resume = {
-      fileName: resume.fileName,
-      filePath: resume.filePath,
-      mimeType: "application/pdf",
-      selectedAt: new Date().toISOString(),
-      extractedText: guestResumeText()
-    };
-
-    // Demo runs never submit. A fictional persona must not be able to file a
-    // real application at a real company.
-    state.config = { ...state.config, mode: "dry-run" };
-    writeState(state);
-
-    saveProfile(db(), {
-      fullName: GUEST_PERSONA.basics.fullName ?? "",
-      firstName: GUEST_PERSONA.basics.firstName,
-      lastName: GUEST_PERSONA.basics.lastName,
-      email: GUEST_PERSONA.basics.email,
-      phone: GUEST_PERSONA.basics.phone ?? "",
-      location: GUEST_PERSONA.basics.location ?? "",
-      links: { ...GUEST_PERSONA.links } as Record<string, unknown>,
-      workAuthorization: { ...GUEST_PERSONA.workAuthorization } as Record<string, unknown>,
-      education: { ...GUEST_PERSONA.education } as Record<string, unknown>,
-      experience: { ...GUEST_PERSONA.experience } as Record<string, unknown>,
-      preferences: { ...GUEST_PERSONA.preferences } as Record<string, unknown>,
-      demographics: { ...GUEST_DEMOGRAPHICS } as Record<string, unknown>,
-      customAnswers: { ...GUEST_PERSONA.customAnswers } as Record<string, unknown>,
-      previousEmployers: GUEST_PERSONA.previousEmployers ?? [],
-      isDemo: true
-    });
-    seedDemoJobs();
-    setSetting(db(), "guest_mode", "1");
-    setSetting(db(), "onboarding_completed", "1");
-
-    emitRunsUpdated();
-    return readState();
-  });
-  ipcMain.handle("desktop:is-guest", () => getSetting(db(), "guest_mode") === "1");
-  ipcMain.handle("desktop:seed-demo-job", () => {
-    seedDemoJobs();
-    return getJob(db(), DEMO_JOB_ID);
-  });
   ipcMain.handle("runs:events", (_event, runId: string, afterId?: number) =>
     listRunEvents(db(), String(runId), Number(afterId ?? 0))
   );
@@ -1750,6 +1744,36 @@ app.whenReady().then(() => {
     const state = readState();
     state.onboarding = profile;
     writeState(state);
+
+    // Also write the database. Until now only the demo path called saveProfile,
+    // so a real user's profile existed solely in automa-state.json while every
+    // query read an empty table.
+    saveProfile(db(), {
+      fullName: profile.basics.fullName ?? `${profile.basics.firstName} ${profile.basics.lastName}`.trim(),
+      firstName: profile.basics.firstName,
+      lastName: profile.basics.lastName,
+      email: profile.basics.email,
+      phone: profile.basics.phone ?? "",
+      location: profile.basics.location ?? "",
+      basics: { ...profile.basics } as Record<string, unknown>,
+      locationStructured: { ...(profile.locationStructured ?? {}) } as Record<string, unknown>,
+      links: { ...profile.links } as Record<string, unknown>,
+      workAuthorization: { ...profile.workAuthorization } as Record<string, unknown>,
+      education: { ...profile.education } as Record<string, unknown>,
+      experience: { ...profile.experience } as Record<string, unknown>,
+      workday: { ...(profile.workday ?? {}) } as Record<string, unknown>,
+      logistics: { ...(profile.logistics ?? {}) } as Record<string, unknown>,
+      preferences: { ...profile.preferences } as Record<string, unknown>,
+      customAnswers: { ...(profile.customAnswers ?? {}) } as Record<string, unknown>,
+      previousEmployers: profile.previousEmployers ?? [],
+      isDemo: false
+    });
+    setSetting(db(), "onboarding_completed", "1");
+
+    // Practice applications exist only for the adapter test harness and are
+    // gated on AUTOMA_DEV_PRACTICE, which shipped builds never set.
+    seedPracticeJobs();
+
     return state.onboarding;
   });
   ipcMain.handle("desktop:save-config", async (_event, config: DesktopAutomationConfig) => {

@@ -7,7 +7,7 @@ export function hasGreenhouseUrlSignals(url: string): boolean {
   // the real adapter drives it; a demo running through a special-case path
   // would prove nothing. Adapter selection goes through canHandle, which calls
   // this function, so the rule has to live here rather than in detectPlatform.
-  if (normalized.includes("automa-demo") || normalized.includes("greenhouse-demo.html")) return true;
+  if (normalized.includes("automa-practice") || normalized.includes("greenhouse-practice.html")) return true;
   try {
     const parsed = new URL(url);
     const ghJid = parsed.searchParams.get("gh_jid");
@@ -23,13 +23,13 @@ export function hasGreenhouseUrlSignals(url: string): boolean {
 export function detectPlatform(url: string): Platform {
   const normalized = url.toLowerCase();
 
-  // Automa's bundled practice applications. Each uses its platform's real
-  // markup so the genuine adapter drives it; a demo that ran through a
-  // special-case path would prove nothing.
-  if (normalized.includes("lever-demo.html")) return "lever";
-  if (normalized.includes("ashby-demo.html")) return "ashby";
-  if (normalized.includes("workatastartup-demo.html")) return "workatastartup";
-  if (normalized.includes("workday-demo.html")) return "workday";
+  // Automa's bundled practice applications, used only by the adapter test
+  // harness. Each uses its platform's real markup so the genuine adapter drives
+  // it; a fixture that ran through a special-case path would prove nothing.
+  if (normalized.includes("lever-practice.html")) return "lever";
+  if (normalized.includes("ashby-practice.html")) return "ashby";
+  if (normalized.includes("workatastartup-practice.html")) return "workatastartup";
+  if (normalized.includes("workday-practice.html")) return "workday";
 
   if (hasGreenhouseUrlSignals(url)) return "greenhouse";
   if (normalized.includes("lever.co")) return "lever";

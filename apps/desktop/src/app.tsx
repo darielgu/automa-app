@@ -542,8 +542,6 @@ interface LocalBridge {
   moveApplied(id: string, stage: TrackerStageName, note?: string): Promise<unknown>;
   setAppliedNotes(id: string, notes: string): Promise<boolean>;
   appliedTimeline(id: string): Promise<Array<{ from: string | null; to: string; note: string; at: string }>>;
-  startGuest(): Promise<DesktopState>;
-  isGuest(): Promise<boolean>;
 }
 
 const bridge = (typeof window !== "undefined" && window.automaDesktop
@@ -557,8 +555,6 @@ const bridge = (typeof window !== "undefined" && window.automaDesktop
       moveApplied: async () => undefined,
       setAppliedNotes: async () => true,
       appliedTimeline: async () => [],
-      startGuest: async () => ({ runs: [], config: createFallbackConfig() }) as DesktopState,
-      isGuest: async () => false
     }) as LocalBridge;
 
 /** One short, honest line about what Automa can do with this posting. */
@@ -1088,8 +1084,8 @@ const ONBOARDING_STEPS = [
 ] as const;
 
 /**
- * First run. There is no sign-in, so this is the only gate: fill in a profile,
- * or load the demo persona and skip straight to the product.
+ * First run. There is no sign-in and no demo shortcut, so this is the only way
+ * into the app: it has to be worth the two minutes it asks for.
  */
 function OnboardingPage({
   desktopState,
@@ -1104,29 +1100,11 @@ function OnboardingPage({
   const [step, setStep] = useState<OnboardingStep>(0);
   const [profile, setProfile] = useState<UserProfileInput>(() => normalizeProfile(desktopState.onboarding));
   const [resume, setResume] = useState<DesktopResumeRecord | undefined>(desktopState.resume);
-  const [busy, setBusy] = useState<null | "guest" | "resume" | "save">(null);
+  const [busy, setBusy] = useState<null | "resume" | "save">(null);
   const [error, setError] = useState<string | null>(null);
 
   const setBasics = (patch: Partial<UserProfileInput["basics"]>) =>
     setProfile((prev) => ({ ...prev, basics: { ...prev.basics, ...patch } }));
-
-  const startGuest = async () => {
-    setBusy("guest");
-    setError(null);
-    try {
-      const state = await (desktopBridge as unknown as { startGuest: () => Promise<DesktopState> }).startGuest();
-      setDesktopState(state);
-      onNotify({
-        tone: "success",
-        message: "Demo profile loaded. Alex Rivera is fictional, and demo runs never submit."
-      });
-      navigate("/jobs", { replace: true });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not load the demo profile.");
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const pickResume = async () => {
     setBusy("resume");
@@ -1345,17 +1323,6 @@ function OnboardingPage({
           </CardFooter>
         </Card>
 
-        <div className="onboarding-guest">
-          <div>
-            <div className="onboarding-guest__title">Just want to look around?</div>
-            <div className="onboarding-guest__hint">
-              Loads a fictional candidate and a generated resume. Demo runs fill applications but never submit them.
-            </div>
-          </div>
-          <Button variant="outline" className="rounded-none" onClick={startGuest} disabled={busy !== null}>
-            {busy === "guest" ? "Preparing…" : "Explore with a demo profile"}
-          </Button>
-        </div>
       </div>
     </div>
   );

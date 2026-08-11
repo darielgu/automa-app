@@ -5,7 +5,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       className={cn(
-        "automa-panel flex flex-col gap-5 overflow-hidden border border-[color:color-mix(in_srgb,var(--border)_72%,white)] py-5 text-sm shadow-[0_24px_80px_rgb(15_23_42_/_0.08)]",
+        "automa-panel flex flex-col gap-5 overflow-hidden border border-[color:color-mix(in_srgb,var(--border)_72%,white)] py-5 text-sm rounded-[4px] shadow-[0_4px_10px_rgb(11_16_32_/_0.08)]",
         className
       )}
       {...props}

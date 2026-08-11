@@ -1,4 +1,36 @@
 @font-face {
+  font-family: "Satoshi";
+  src: url("./fonts/Satoshi-Variable.woff2") format("woff2-variations");
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("./fonts/Satoshi-VariableItalic.woff2") format("woff2-variations");
+  font-style: italic;
+  font-weight: 300 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono[wght].woff2") format("woff2-variations");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Italic[wght].woff2") format("woff2-variations");
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Geist";
   src: url("./fonts/Geist[wght].woff2") format("woff2-variations");
   font-style: normal;
@@ -58,9 +90,9 @@
   --frame-inset: clamp(1.5rem, 6vw, 4.5rem);
   --frame-top: clamp(5rem, 9vw, 6rem);
   --grid-line: rgb(0 0 0 / 0.32);
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Satoshi", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-serif: "Satoshi", "Geist", ui-sans-serif, system-ui, sans-serif;
   --chart-1: oklch(0.655 0.197 38);
   --chart-2: oklch(0.72 0.14 80);
   --chart-3: oklch(0.62 0.12 160);
@@ -132,8 +164,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Satoshi", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-heading: "Geist", ui-sans-serif, system-ui, sans-serif;
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
@@ -244,10 +276,9 @@ select {
 }
 
 .automa-panel {
-  backdrop-filter: blur(20px);
   background: color-mix(in srgb, var(--card) 82%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  box-shadow: 0 32px 90px rgb(0 0 0 / 0.12);
+  box-shadow: 0 4px 10px rgb(11 16 32 / 0.08);
 }
 
 .automa-grid-header {
@@ -593,5 +624,26 @@ select {
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced motion
+
+   MotionConfig covers every framer component, but not CSS transitions,
+   keyframes, or the skeleton pulse. Someone who asks the OS for less motion
+   should get it from the whole app, not most of it.
+
+   .animate-spin is exempt on purpose: a spinner frozen mid-rotation reads as a
+   hung app, which is worse than the motion it removes.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *:not(.animate-spin)::before,
+  *:not(.animate-spin)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

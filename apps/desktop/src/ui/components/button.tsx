@@ -3,16 +3,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn.js";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-[10px] border border-transparent text-sm font-medium tracking-[-0.01em] transition-all duration-200 outline-none disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-[2px] border border-transparent text-sm font-medium tracking-[-0.01em] transition-all duration-200 outline-none disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
           "bg-[var(--primary)] text-[var(--primary-foreground)] hover:brightness-[1.08] active:translate-y-[1px]",
         outline:
-          "border-[color:color-mix(in_srgb,var(--border)_80%,white)] bg-[color:color-mix(in_srgb,var(--background)_92%,white)] text-[var(--foreground)] shadow-[0_8px_24px_rgb(15_23_42_/_0.04)] hover:-translate-y-0.5 hover:bg-[color:color-mix(in_srgb,var(--muted)_88%,white)]",
+          "border-[color:color-mix(in_srgb,var(--border)_80%,white)] bg-[color:color-mix(in_srgb,var(--background)_92%,white)] text-[var(--foreground)] hover:bg-[color:color-mix(in_srgb,var(--muted)_88%,white)]",
         secondary:
-          "bg-[color:color-mix(in_srgb,var(--secondary)_86%,white)] text-[var(--secondary-foreground)] shadow-[0_8px_24px_rgb(15_23_42_/_0.04)] hover:-translate-y-0.5 hover:opacity-95",
+          "bg-[color:color-mix(in_srgb,var(--secondary)_86%,white)] text-[var(--secondary-foreground)] hover:opacity-95",
         ghost:
           "border-[color:transparent] bg-transparent hover:border-[color:color-mix(in_srgb,var(--border)_65%,white)] hover:bg-[color:color-mix(in_srgb,var(--background)_86%,white)]",
         destructive:

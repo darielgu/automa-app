@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { toastVariants } from "./lib/motion.js";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -728,7 +729,7 @@ function InlineBrowserDrawer({
           <span className="desktop-inline-browser__eyebrow">In-app browser</span>
           <div className="desktop-inline-browser__title-row">
             <span className="desktop-inline-browser__title">{run.jobTitle || deriveRunCompanyLabel(run)}</span>
-            <Badge variant="secondary" className="rounded-none">{workerLabel}</Badge>
+            <Badge variant="secondary">{workerLabel}</Badge>
           </div>
           <div className="desktop-inline-browser__subtitle">
             {run.company ? `${run.company} · ` : ""}
@@ -738,7 +739,6 @@ function InlineBrowserDrawer({
         <Button
           type="button"
           variant="outline"
-          className="rounded-none"
           onClick={() => void desktopBridge.closeRunBrowser(run.id)}
         >
           <X className="size-4" />
@@ -1161,7 +1161,7 @@ function OnboardingPage({
           ))}
         </ol>
 
-        <Card className="rounded-none">
+        <Card>
           <CardHeader>
             <CardTitle>{current.title}</CardTitle>
             <CardDescription>{current.hint}</CardDescription>
@@ -1261,7 +1261,7 @@ function OnboardingPage({
                       {resume ? "Attached. This file is uploaded to each application." : "PDF, DOCX or TXT."}
                     </div>
                   </div>
-                  <Button variant="outline" className="rounded-none" onClick={pickResume} disabled={busy === "resume"}>
+                  <Button variant="outline" onClick={pickResume} disabled={busy === "resume"}>
                     {busy === "resume" ? "Reading…" : resume ? "Choose another" : "Choose file"}
                   </Button>
                 </div>
@@ -1280,7 +1280,6 @@ function OnboardingPage({
           <CardFooter className="onboarding-footer">
             <Button
               variant="ghost"
-              className="rounded-none"
               onClick={() => setStep((prev) => (prev > 0 ? ((prev - 1) as OnboardingStep) : prev))}
               disabled={step === 0 || busy !== null}
             >
@@ -1288,14 +1287,13 @@ function OnboardingPage({
             </Button>
             {step < 2 ? (
               <Button
-                className="rounded-none"
                 onClick={() => setStep((prev) => ((prev + 1) as OnboardingStep))}
                 disabled={!stepValid || busy !== null}
               >
                 Continue
               </Button>
             ) : (
-              <Button className="rounded-none" onClick={finish} disabled={!stepValid || busy !== null}>
+              <Button onClick={finish} disabled={!stepValid || busy !== null}>
                 {busy === "save" ? "Saving…" : "Finish"}
               </Button>
             )}
@@ -1711,7 +1709,7 @@ function JobsPage({
                   variant="outline"
                   size="sm"
                   onClick={toggleSelectionMode}
-                  className="cursor-pointer rounded-none"
+                  className="cursor-pointer"
                 >
                   Cancel
                 </Button>
@@ -1720,7 +1718,7 @@ function JobsPage({
                   size="sm"
                   disabled={selectedJobIds.length === 0}
                   onClick={() => void handleApplyMany(selectedJobs)}
-                  className="cursor-pointer rounded-none"
+                  className="cursor-pointer"
                 >
                   {selectedJobIds.length > 0 ? `Apply ${selectedJobIds.length}` : "Apply"}
                 </Button>
@@ -1734,7 +1732,7 @@ function JobsPage({
                     size="sm"
                     aria-label="Select jobs"
                     onClick={toggleSelectionMode}
-                    className="size-8 cursor-pointer rounded-none px-0"
+                    className="size-8 cursor-pointer px-0"
                   >
                     <ListChecks className="size-3.5" />
                   </Button>
@@ -1811,7 +1809,7 @@ function JobsPage({
 
                     <div className="desktop-job-expansion__tags">
                       {job.roleTags.map((tag) => (
-                        <Badge key={tag} variant="outline" className="rounded-none">
+                        <Badge key={tag} variant="outline">
                           {tag}
                         </Badge>
                       ))}
@@ -1832,7 +1830,7 @@ function JobsPage({
 
                     <div className="desktop-job-expansion__actions">
                       <div className="flex flex-wrap justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => window.open(job.sourceUrl, "_blank", "noopener,noreferrer")} className="cursor-pointer rounded-none">
+                        <Button type="button" variant="outline" onClick={() => window.open(job.sourceUrl, "_blank", "noopener,noreferrer")} className="cursor-pointer">
                           <ArrowUpRight className="size-4" />
                           Open externally
                         </Button>
@@ -1966,7 +1964,7 @@ function RunsPage({
             <Button
               type="button"
               size="sm"
-              className="h-6 cursor-pointer rounded-none px-2 text-[0.72rem]"
+              className="h-6 cursor-pointer px-2 text-[0.72rem]"
               onClick={() => void desktopBridge.openRunBrowser(run.id)}
             >
               View
@@ -1977,7 +1975,7 @@ function RunsPage({
               type="button"
               variant="outline"
               size="sm"
-              className="h-6 cursor-pointer rounded-none px-2 text-[0.72rem]"
+              className="h-6 cursor-pointer px-2 text-[0.72rem]"
               onClick={() => void desktopBridge.closeRunBrowser(run.id)}
             >
               Close
@@ -1997,7 +1995,7 @@ function RunsPage({
           <Button
             type="button"
             size="sm"
-            className="h-6 cursor-pointer rounded-none px-2 text-[0.72rem]"
+            className="h-6 cursor-pointer px-2 text-[0.72rem]"
             onClick={() => navigate(`/runs/${run.id}`)}
           >
             View
@@ -2006,7 +2004,7 @@ function RunsPage({
             type="button"
             variant="outline"
             size="icon-sm"
-            className={cn("size-6 cursor-pointer rounded-none", feedbackButtonClass)}
+            className={cn("size-6 cursor-pointer", feedbackButtonClass)}
             onClick={() => setFeedbackTargetRunId(run.id)}
             aria-label={`Leave feedback for ${run.jobTitle || deriveRunCompanyLabel(run)}`}
           >
@@ -2021,7 +2019,7 @@ function RunsPage({
         <Button
           type="button"
           size="sm"
-          className="h-6 cursor-pointer rounded-none px-2 text-[0.72rem]"
+          className="h-6 cursor-pointer px-2 text-[0.72rem]"
           onClick={() => void desktopBridge.resumeRun(run.id)}
         >
           Resume
@@ -2035,7 +2033,7 @@ function RunsPage({
           type="button"
           variant="outline"
           size="icon-sm"
-          className={cn("size-6 cursor-pointer rounded-none", feedbackButtonClass)}
+          className={cn("size-6 cursor-pointer", feedbackButtonClass)}
           onClick={() => setFeedbackTargetRunId(run.id)}
           aria-label={`Leave feedback for ${run.jobTitle || deriveRunCompanyLabel(run)}`}
         >
@@ -2054,7 +2052,7 @@ function RunsPage({
       sidebarHeader={<SidebarBrand />}
       sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
       sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
-      headerRight={<Badge variant="secondary" className="rounded-none">{runs.length} runs</Badge>}
+      headerRight={<Badge variant="secondary">{runs.length} runs</Badge>}
     >
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <CardHeader>
@@ -2142,7 +2140,7 @@ function RunsPage({
                         <Button
                           type="button"
                           variant="outline"
-                          className="h-9 cursor-pointer rounded-none"
+                          className="h-9 cursor-pointer"
                           onClick={() => navigate(`/runs/${run.id}`)}
                         >
                           View run
@@ -2151,7 +2149,7 @@ function RunsPage({
                           <Button
                             type="button"
                             variant="outline"
-                            className="cursor-pointer rounded-none"
+                            className="cursor-pointer"
                             onClick={() => void desktopBridge.openRunBrowser(run.id)}
                           >
                             View browser
@@ -2161,7 +2159,7 @@ function RunsPage({
                           <Button
                             type="button"
                             variant="outline"
-                            className="cursor-pointer rounded-none"
+                            className="cursor-pointer"
                             onClick={() => void desktopBridge.closeRunBrowser(run.id)}
                           >
                             Close browser
@@ -2171,7 +2169,7 @@ function RunsPage({
                           <Button
                             type="button"
                             variant="outline"
-                            className="cursor-pointer rounded-none"
+                            className="cursor-pointer"
                             disabled={Boolean(cancellingRunIds[run.id])}
                             onClick={() => {
                               void handleCancelRun(run);
@@ -2300,7 +2298,7 @@ function RunDetailPage({
         sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
         sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
         headerIdentityClassName="desktop-run-detail__header-identity"
-        headerRight={<Badge variant={badgeVariant} className="rounded-none">{formatRunStatus(currentRun.status)}</Badge>}
+        headerRight={<Badge variant={badgeVariant}>{formatRunStatus(currentRun.status)}</Badge>}
       >
         <div className="desktop-run-detail">
         <Card className="overflow-hidden">
@@ -2317,11 +2315,11 @@ function RunDetailPage({
               <BackButton onClick={() => navigate("/runs")} />
               {currentRun.status === "running" ? (
                 <>
-                  <Button type="button" variant="outline" className="rounded-none" onClick={() => void handleInspectWorker()} disabled={inspectBusy}>
+                  <Button type="button" variant="outline" onClick={() => void handleInspectWorker()} disabled={inspectBusy}>
                     {inspectBusy ? "Opening browser..." : "View browser"}
                   </Button>
                   {currentRun.browserVisible ? (
-                    <Button type="button" variant="outline" className="rounded-none" onClick={() => void handleCloseWorker()} disabled={inspectBusy}>
+                    <Button type="button" variant="outline" onClick={() => void handleCloseWorker()} disabled={inspectBusy}>
                       {inspectBusy ? "Closing browser..." : "Close browser"}
                     </Button>
                   ) : null}
@@ -2555,7 +2553,7 @@ function AppliedPage({
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search title, company, location"
-                className="rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
               />
             </label>
           </div>
@@ -2687,7 +2685,7 @@ function AppliedPage({
                                   <Button
                                     type="button"
                                     variant="outline"
-                                    className="h-7 rounded-none px-2.5 text-[0.72rem]"
+                                    className="h-7 px-2.5 text-[0.72rem]"
                                     onClick={(event) => {
                                       event.stopPropagation();
                                       window.open(job.sourceUrl, "_blank", "noopener,noreferrer");
@@ -2857,7 +2855,7 @@ function ApplicationDetailPage({
               <Button
                 type="button"
                 variant="outline"
-                className="h-9 rounded-none"
+                className="h-9"
                 onClick={() => window.open(appliedJob.sourceUrl, "_blank", "noopener,noreferrer")}
               >
                 <ArrowUpRight className="size-4" />
@@ -2867,7 +2865,7 @@ function ApplicationDetailPage({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-9 rounded-none"
+                  className="h-9"
                   onClick={() => navigate(`/runs/${application.run!.id}`)}
                 >
                   View run
@@ -2935,7 +2933,6 @@ function ApplicationDetailPage({
                     value={insightsSummary}
                     onChange={(event) => setInsightsSummary(event.target.value)}
                     rows={6}
-                    className="rounded-none"
                     placeholder="What stands out about this company, team, or role?"
                   />
                 </label>
@@ -2953,7 +2950,7 @@ function ApplicationDetailPage({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-8 rounded-none px-3 text-[0.74rem]"
+                  className="h-8 px-3 text-[0.74rem]"
                   onClick={() => setContactTargets((current) => [...current, createEmptyContactTarget()])}
                 >
                   <Plus className="size-3.5" />
@@ -2984,25 +2981,21 @@ function ApplicationDetailPage({
                           <Input
                             value={target.name}
                             onChange={(event) => setContactTargets((current) => current.map((entry) => entry.id === target.id ? { ...entry, name: event.target.value } : entry))}
-                            className="rounded-none"
                             placeholder="Name"
                           />
                           <Input
                             value={target.title ?? ""}
                             onChange={(event) => setContactTargets((current) => current.map((entry) => entry.id === target.id ? { ...entry, title: event.target.value } : entry))}
-                            className="rounded-none"
                             placeholder="Title"
                           />
                           <Input
                             value={target.channel ?? ""}
                             onChange={(event) => setContactTargets((current) => current.map((entry) => entry.id === target.id ? { ...entry, channel: event.target.value } : entry))}
-                            className="rounded-none"
                             placeholder="Channel"
                           />
                           <Input
                             value={target.profileUrl ?? ""}
                             onChange={(event) => setContactTargets((current) => current.map((entry) => entry.id === target.id ? { ...entry, profileUrl: event.target.value } : entry))}
-                            className="rounded-none"
                             placeholder="Profile URL"
                           />
                         </div>
@@ -3010,7 +3003,6 @@ function ApplicationDetailPage({
                           value={target.note ?? ""}
                           onChange={(event) => setContactTargets((current) => current.map((entry) => entry.id === target.id ? { ...entry, note: event.target.value } : entry))}
                           rows={3}
-                          className="rounded-none"
                           placeholder="Notes"
                         />
                       </div>
@@ -3029,7 +3021,7 @@ function ApplicationDetailPage({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-8 rounded-none px-3 text-[0.74rem]"
+                  className="h-8 px-3 text-[0.74rem]"
                   onClick={() => setMessageDrafts((current) => [...current, createEmptyMessageDraft()])}
                 >
                   <Plus className="size-3.5" />
@@ -3060,13 +3052,11 @@ function ApplicationDetailPage({
                           <Input
                             value={draft.title}
                             onChange={(event) => setMessageDrafts((current) => current.map((entry) => entry.id === draft.id ? { ...entry, title: event.target.value } : entry))}
-                            className="rounded-none"
                             placeholder="Draft title"
                           />
                           <Input
                             value={draft.channel ?? ""}
                             onChange={(event) => setMessageDrafts((current) => current.map((entry) => entry.id === draft.id ? { ...entry, channel: event.target.value } : entry))}
-                            className="rounded-none"
                             placeholder="Channel"
                           />
                         </div>
@@ -3074,7 +3064,6 @@ function ApplicationDetailPage({
                           value={draft.body}
                           onChange={(event) => setMessageDrafts((current) => current.map((entry) => entry.id === draft.id ? { ...entry, body: event.target.value } : entry))}
                           rows={5}
-                          className="rounded-none"
                           placeholder="Draft message"
                         />
                       </div>
@@ -3087,7 +3076,6 @@ function ApplicationDetailPage({
             <div className="desktop-applied-detail__actions">
               <Button
                 type="button"
-                className="rounded-none"
                 disabled={!hasChanges || saveBusy}
                 onClick={() => void handleSave()}
               >
@@ -3206,7 +3194,7 @@ function SettingsPage({
     return (
       <div className="desktop-settings-savebar">
         <div className="desktop-settings-savebar__copy">{configStateLabel}</div>
-        <Button type="submit" size="sm" className="rounded-none" disabled={busy || !configDirty}>
+        <Button type="submit" size="sm" disabled={busy || !configDirty}>
           {busy ? "Saving..." : "Save changes"}
         </Button>
       </div>
@@ -3283,7 +3271,7 @@ function SettingsPage({
                 Editing profile, resume-derived basics, and targeting in one place keeps the jobs feed and automation answers aligned.
               </div>
               <div className="desktop-settings-inline-actions">
-                <Button type="button" variant="outline" size="sm" className="rounded-none" onClick={() => navigate("/onboarding")}>
+                <Button type="button" variant="outline" size="sm" onClick={() => navigate("/onboarding")}>
                   Open onboarding
                 </Button>
               </div>
@@ -3305,7 +3293,7 @@ function SettingsPage({
               The desktop worker uses your local resume file, parsed profile, and embedded browser session during applications.
             </p>
           </div>
-          <Badge variant="secondary" className="w-fit rounded-none">
+          <Badge variant="secondary" className="w-fit">
             {resumeReady ? "Resume loaded" : "Resume missing"}
           </Badge>
         </div>
@@ -3371,10 +3359,10 @@ function SettingsPage({
               ) : null}
 
               <div className="desktop-settings-inline-actions">
-                <Button type="button" variant="outline" size="sm" className="rounded-none" onClick={() => void replaceResume()} disabled={parseBusy}>
+                <Button type="button" variant="outline" size="sm" onClick={() => void replaceResume()} disabled={parseBusy}>
                   {parseBusy ? "Parsing..." : resumeRecord ? "Replace resume" : "Add resume"}
                 </Button>
-                <Button type="button" variant="outline" size="sm" className="rounded-none" onClick={() => void reparseResume()} disabled={parseBusy || !resumeRecord}>
+                <Button type="button" variant="outline" size="sm" onClick={() => void reparseResume()} disabled={parseBusy || !resumeRecord}>
                   Re-parse current resume
                 </Button>
               </div>
@@ -3424,7 +3412,7 @@ function SettingsPage({
               Keep the main automation controls visible here. Technical endpoints and filesystem wiring live in Advanced.
             </p>
           </div>
-          <Badge variant="secondary" className="w-fit rounded-none">
+          <Badge variant="secondary" className="w-fit">
             {config.mode === "auto-submit" ? "Auto-submit" : "Dry-run"}
           </Badge>
         </div>
@@ -3453,11 +3441,11 @@ function SettingsPage({
                 </label>
                 <label className="desktop-field">
                   <span className="desktop-field__label">Timeout (ms)</span>
-                  <Input className="rounded-none" value={String(config.timeoutMs)} onChange={(event) => updateConfig("timeoutMs", Number(event.target.value) || 0)} />
+                  <Input value={String(config.timeoutMs)} onChange={(event) => updateConfig("timeoutMs", Number(event.target.value) || 0)} />
                 </label>
                 <label className="desktop-field">
                   <span className="desktop-field__label">Parallel workers (max 2)</span>
-                  <Input className="rounded-none" value={String(config.maxParallelRuns)} onChange={(event) => updateConfig("maxParallelRuns", Math.max(1, Math.min(2, Number(event.target.value) || 1)))} />
+                  <Input value={String(config.maxParallelRuns)} onChange={(event) => updateConfig("maxParallelRuns", Math.max(1, Math.min(2, Number(event.target.value) || 1)))} />
                 </label>
                 <div className="desktop-settings-inline-note">
                   Worker windows stay hidden by default and only open when you explicitly click View on a running job.
@@ -3489,7 +3477,7 @@ function SettingsPage({
                     </div>
                     <label className="desktop-field">
                       <span className="desktop-field__label">Model</span>
-                      <Input className="rounded-none" value={config.openaiModel} onChange={(event) => updateConfig("openaiModel", event.target.value)} />
+                      <Input value={config.openaiModel} onChange={(event) => updateConfig("openaiModel", event.target.value)} />
                     </label>
                   </>
                 )}
@@ -3513,7 +3501,7 @@ function SettingsPage({
               These controls affect local service routing, API connectivity, and the embedded Electron worker runtime.
             </p>
           </div>
-          <Badge variant="outline" className="w-fit rounded-none">
+          <Badge variant="outline" className="w-fit">
             Technical
           </Badge>
         </div>
@@ -3523,7 +3511,7 @@ function SettingsPage({
             <strong>Advanced controls stay collapsed by default.</strong>
             <span>Open them only when you need to rewire the local desktop environment or inspect the embedded worker runtime.</span>
           </div>
-          <Button type="button" variant="outline" size="sm" className="rounded-none" onClick={() => setAdvancedExpanded((current) => !current)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => setAdvancedExpanded((current) => !current)}>
             {advancedExpanded ? "Hide advanced" : "Show advanced"}
           </Button>
         </div>
@@ -3539,15 +3527,15 @@ function SettingsPage({
                 <CardContent className="desktop-settings-form-grid">
                   <label className="desktop-field">
                     <span className="desktop-field__label">API base URL</span>
-                    <Input className="rounded-none" value={config.apiBaseUrl} onChange={(event) => updateConfig("apiBaseUrl", event.target.value)} />
+                    <Input value={config.apiBaseUrl} onChange={(event) => updateConfig("apiBaseUrl", event.target.value)} />
                   </label>
                   <label className="desktop-field">
                     <span className="desktop-field__label">OpenAI API env var</span>
-                    <Input className="rounded-none" value={config.openaiApiKeyEnv} onChange={(event) => updateConfig("openaiApiKeyEnv", event.target.value)} />
+                    <Input value={config.openaiApiKeyEnv} onChange={(event) => updateConfig("openaiApiKeyEnv", event.target.value)} />
                   </label>
                   <label className="desktop-field">
                     <span className="desktop-field__label">Ollama base URL</span>
-                    <Input className="rounded-none" value={config.ollamaBaseUrl} onChange={(event) => updateConfig("ollamaBaseUrl", event.target.value)} />
+                    <Input value={config.ollamaBaseUrl} onChange={(event) => updateConfig("ollamaBaseUrl", event.target.value)} />
                   </label>
                 </CardContent>
               </Card>
@@ -3560,19 +3548,19 @@ function SettingsPage({
                 <CardContent className="desktop-settings-form-grid">
                   <label className="desktop-field">
                     <span className="desktop-field__label">Output directory</span>
-                    <Input className="rounded-none" value={config.outputDir} onChange={(event) => updateConfig("outputDir", event.target.value)} />
+                    <Input value={config.outputDir} onChange={(event) => updateConfig("outputDir", event.target.value)} />
                   </label>
                   <label className="desktop-field">
                     <span className="desktop-field__label">Screenshots directory</span>
-                    <Input className="rounded-none" value={config.screenshotsDir} onChange={(event) => updateConfig("screenshotsDir", event.target.value)} />
+                    <Input value={config.screenshotsDir} onChange={(event) => updateConfig("screenshotsDir", event.target.value)} />
                   </label>
                   <label className="desktop-field">
                     <span className="desktop-field__label">Embedded debug port</span>
-                    <Input className="rounded-none" readOnly value={String(config.automationDebugPort)} />
+                    <Input readOnly value={String(config.automationDebugPort)} />
                   </label>
                   <label className="desktop-field">
                     <span className="desktop-field__label">Embedded partition</span>
-                    <Input className="rounded-none" readOnly value={config.automationPartition} />
+                    <Input readOnly value={config.automationPartition} />
                   </label>
                 </CardContent>
               </Card>
@@ -3713,12 +3701,52 @@ export function App() {
       .trim() ||
     undefined;
 
+  /**
+   * Toast queue.
+   *
+   * Three things the previous version lacked and that any real use exposes: a
+   * cap, so a batch of runs cannot stack nine messages nobody can read; a
+   * dismiss control; and a pause on hover, so a message cannot expire while it
+   * is being read. Errors linger longer than successes.
+   */
+  const MAX_VISIBLE_TOASTS = 3;
+  const toastTimers = useRef(new Map<string, { timeout: number; endsAt: number; remaining: number }>());
+
+  const dismissToast = useCallback((id: string) => {
+    const timer = toastTimers.current.get(id);
+    if (timer) window.clearTimeout(timer.timeout);
+    toastTimers.current.delete(id);
+    setToasts((current) => current.filter((entry) => entry.id !== id));
+  }, []);
+
+  const armToast = useCallback(
+    (id: string, ms: number) => {
+      const timeout = window.setTimeout(() => dismissToast(id), ms);
+      toastTimers.current.set(id, { timeout, endsAt: Date.now() + ms, remaining: ms });
+    },
+    [dismissToast]
+  );
+
+  const pauseToast = useCallback((id: string) => {
+    const timer = toastTimers.current.get(id);
+    if (!timer) return;
+    window.clearTimeout(timer.timeout);
+    timer.remaining = Math.max(600, timer.endsAt - Date.now());
+  }, []);
+
+  const resumeToast = useCallback(
+    (id: string) => {
+      const timer = toastTimers.current.get(id);
+      if (!timer) return;
+      armToast(id, timer.remaining);
+    },
+    [armToast]
+  );
+
   function pushToast(toast: Omit<ToastItem, "id">) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setToasts((current) => [...current, { id, ...toast }]);
-    window.setTimeout(() => {
-      setToasts((current) => current.filter((entry) => entry.id !== id));
-    }, 4200);
+    setToasts((current) => [...current, { id, ...toast }].slice(-MAX_VISIBLE_TOASTS));
+    armToast(id, toast.tone === "error" ? 7000 : 4200);
   }
 
 
@@ -3763,11 +3791,38 @@ export function App() {
           aria-live="polite"
           aria-atomic="true"
         >
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`desktop-toast desktop-toast--${toast.tone}`}>
-              {toast.message}
-            </div>
-          ))}
+          {/*
+            popLayout so a dismissed toast leaves sideways while the ones below
+            slide up with transforms rather than jumping.
+          */}
+          <AnimatePresence mode="popLayout" initial={false}>
+            {toasts.map((toast) => (
+              <motion.div
+                key={toast.id}
+                layout
+                variants={toastVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                role="status"
+                className={`desktop-toast desktop-toast--${toast.tone}`}
+                onMouseEnter={() => pauseToast(toast.id)}
+                onFocus={() => pauseToast(toast.id)}
+                onMouseLeave={() => resumeToast(toast.id)}
+                onBlur={() => resumeToast(toast.id)}
+              >
+                <span className="desktop-toast__message">{toast.message}</span>
+                <button
+                  type="button"
+                  className="desktop-toast__dismiss"
+                  aria-label="Dismiss"
+                  onClick={() => dismissToast(toast.id)}
+                >
+                  ×
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       ) : null}
     </div>

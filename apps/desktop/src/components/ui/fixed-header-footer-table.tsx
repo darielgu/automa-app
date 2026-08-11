@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button.js"
 import { Skeleton } from "@/components/ui/skeleton.js"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.js"
 import { Progress } from "@/ui/components/progress.js"
+import { duration, ease } from "../../lib/motion.js";
 import { cn } from "@/lib/utils.js"
 
 export type JobTableFeedback = "up" | "down" | null
@@ -64,13 +65,6 @@ type FixedHeaderFooterTableProps = {
   showStatusColumn?: boolean
 }
 
-const easeOutQuint: [number, number, number, number] = [0.23, 1, 0.32, 1]
-const expandSpring = {
-  type: "spring" as const,
-  damping: 34,
-  stiffness: 380,
-  mass: 0.8,
-}
 
 export default function FixedHeaderFooterTable({
   items,
@@ -162,35 +156,35 @@ export default function FixedHeaderFooterTable({
                     {selectionMode ? (
                       <TableCell className="px-2">
                         <div className="flex items-center justify-center">
-                          <Skeleton className="size-4 rounded-none" />
+                          <Skeleton className="size-4" />
                         </div>
                       </TableCell>
                     ) : null}
                     <TableCell>
-                      <Skeleton className="h-5 w-[72%] rounded-none" />
+                      <Skeleton className="h-5 w-[72%]" />
                     </TableCell>
                     <TableCell>
                       <div className="flex min-w-0 flex-col gap-2">
-                        <Skeleton className="h-5 w-[68%] rounded-none" />
-                        <Skeleton className="h-3.5 w-[38%] rounded-none" />
+                        <Skeleton className="h-5 w-[68%]" />
+                        <Skeleton className="h-3.5 w-[38%]" />
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex min-w-0 flex-col gap-2">
-                        <Skeleton className="h-3 w-16 rounded-none" />
-                        <Skeleton className="h-4 w-28 rounded-none" />
+                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-4 w-28" />
                       </div>
                     </TableCell>
                     {showStatusColumn ? (
                       <TableCell>
-                        <Skeleton className="h-7 w-20 rounded-none" />
+                        <Skeleton className="h-7 w-20" />
                       </TableCell>
                     ) : null}
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
-                        <Skeleton className="h-7 w-20 rounded-none" />
-                        <Skeleton className="size-7 rounded-none" />
-                        <Skeleton className="size-7 rounded-none" />
+                        <Skeleton className="h-7 w-20" />
+                        <Skeleton className="size-7" />
+                        <Skeleton className="size-7" />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -293,7 +287,7 @@ export default function FixedHeaderFooterTable({
                               size="sm"
                               onClick={() => onApply(item.id)}
                               disabled={item.applied || item.queued || item.applying}
-                              className="cursor-pointer rounded-none"
+                              className="cursor-pointer"
                             >
                               {item.applied ? "Applied" : item.queued ? "Queued" : item.applying ? "Applying..." : "Apply"}
                             </Button>
@@ -333,40 +327,36 @@ export default function FixedHeaderFooterTable({
                           colSpan={selectionMode ? (showStatusColumn ? 6 : 5) : showStatusColumn ? 5 : 4}
                           className="border-b-0 bg-transparent p-0"
                         >
-                          <motion.div
-                            initial={false}
-                            animate={{
-                              height: isExpanded ? "auto" : 0,
-                              opacity: isExpanded ? 1 : 0,
-                            }}
-                            transition={{
-                              height: expandSpring,
-                              opacity: {
-                                duration: isExpanded ? 0.2 : 0.12,
-                                delay: isExpanded ? 0.08 : 0,
-                                ease: easeOutQuint,
-                              },
-                            }}
+                          {/*
+                            The row height changes in one non-animated step and
+                            the content slides inside the clip. Animating
+                            `height` (which this used to do) relayouts the whole
+                            table every frame, and design.md forbids animating
+                            layout properties for exactly that reason.
+                          */}
+                          <div
                             className="overflow-hidden"
-                            style={{ pointerEvents: isExpanded ? "auto" : "none" }}
+                            style={{
+                              height: isExpanded ? "auto" : 0,
+                              pointerEvents: isExpanded ? "auto" : "none"
+                            }}
                             aria-hidden={isExpanded ? undefined : true}
                           >
                             <motion.div
                               initial={false}
                               animate={{
                                 opacity: isExpanded ? 1 : 0,
-                                y: isExpanded ? 0 : -8,
+                                y: isExpanded ? 0 : -8
                               }}
                               transition={{
-                                duration: isExpanded ? 0.18 : 0.12,
-                                delay: isExpanded ? 0.04 : 0,
-                                ease: easeOutQuint,
+                                duration: isExpanded ? duration.fast : duration.instant,
+                                ease: isExpanded ? ease.out : ease.in
                               }}
                               className="px-3 pb-4 pt-0"
                             >
                               {renderExpandedContent(item.id)}
                             </motion.div>
-                          </motion.div>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : null}
@@ -384,13 +374,13 @@ export default function FixedHeaderFooterTable({
 function getFeedbackButtonClass(feedback: JobTableFeedback, target: Exclude<JobTableFeedback, null>, pending?: boolean) {
   if (feedback !== target) {
     return cn(
-      "cursor-pointer rounded-none border-transparent",
+      "cursor-pointer border-transparent",
       pending && "pointer-events-none opacity-60"
     )
   }
 
   return cn(
-    "cursor-pointer rounded-none border",
+    "cursor-pointer border",
     target === "up"
       ? "border-[rgba(82,125,90,0.18)] bg-[rgba(116,170,124,0.16)] text-[rgb(55,92,61)] hover:bg-[rgba(116,170,124,0.22)] hover:text-[rgb(49,84,55)]"
       : "border-[rgba(166,103,98,0.18)] bg-[rgba(218,142,134,0.16)] text-[rgb(126,72,68)] hover:bg-[rgba(218,142,134,0.22)] hover:text-[rgb(112,62,58)]",

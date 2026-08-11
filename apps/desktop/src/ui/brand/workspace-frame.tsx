@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+import { motion } from "framer-motion";
+import { useLocation } from "react-router-dom";
+import { pageEnter } from "../../lib/motion.js";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, SidebarProvider, SidebarRail, SidebarTrigger } from "../components/sidebar.js";
 import { cn } from "../lib/cn.js";
 
@@ -29,6 +32,7 @@ export function WorkspaceFrame({
   className,
   contentClassName
 }: WorkspaceFrameProps) {
+  const location = useLocation();
   return (
     <SidebarProvider className={cn("min-h-screen bg-background", className)}>
       <Sidebar variant="inset" collapsible="icon">
@@ -55,9 +59,21 @@ export function WorkspaceFrame({
             {headerContent}
           </div>
         </div>
-        <div className={cn("flex flex-1 flex-col gap-4 px-3 py-4 sm:px-4 lg:px-6", contentClassName)}>
+        {/*
+          Keyed on the route so switching screens fades the content in without
+          moving the sidebar or the app bar. Enter only: each screen mounts its
+          own frame, so there is no exiting tree to hold, and waiting for one
+          would just make every navigation feel slower.
+        */}
+        <motion.div
+          key={location.pathname}
+          variants={pageEnter}
+          initial="initial"
+          animate="animate"
+          className={cn("flex flex-1 flex-col gap-4 px-3 py-4 sm:px-4 lg:px-6", contentClassName)}
+        >
           {children}
-        </div>
+        </motion.div>
       </SidebarInset>
     </SidebarProvider>
   );

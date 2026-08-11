@@ -50,7 +50,7 @@ export default function FeedbackWidget({
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const ratingButtonClass =
-    "h-7 rounded-none border px-2.5 text-[0.78rem] font-medium tracking-[-0.01em] transition-all duration-150"
+    "h-7 border px-2.5 text-[0.78rem] font-medium tracking-[-0.01em] transition-all duration-150"
 
   async function handleSubmit() {
     if (!rating || isSubmitting) return
@@ -75,7 +75,7 @@ export default function FeedbackWidget({
       className="fixed bottom-4 right-4 z-50 w-[min(24rem,calc(100vw-2rem))]"
       aria-live="polite"
     >
-      <Card className="overflow-hidden rounded-none border-[color:color-mix(in_srgb,var(--border)_82%,white)] shadow-[0_18px_42px_rgb(11_16_32_/_0.1)]">
+      <Card className="overflow-hidden border-[color:color-mix(in_srgb,var(--border)_82%,white)] shadow-[0_18px_42px_rgb(11_16_32_/_0.1)]">
         <CardHeader className="flex flex-row items-start justify-between gap-3 border-b border-[color:color-mix(in_srgb,var(--border)_82%,white)] px-4 py-3">
           <div className="min-w-0">
             <CardTitle className="text-[0.92rem] font-medium tracking-[-0.02em]">{title}</CardTitle>
@@ -87,7 +87,6 @@ export default function FeedbackWidget({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="rounded-none"
             onClick={onClose}
             aria-label="Close feedback widget"
           >
@@ -144,7 +143,7 @@ export default function FeedbackWidget({
                   placeholder={placeholder}
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
-                  className="mt-0 min-h-24 rounded-none px-3 py-2 text-[0.84rem] shadow-none"
+                  className="mt-0 min-h-24 px-3 py-2 text-[0.84rem] shadow-none"
                   rows={3}
                   aria-label="Feedback comment"
                 />
@@ -157,7 +156,6 @@ export default function FeedbackWidget({
               type="button"
               variant="outline"
               size="sm"
-              className="rounded-none"
               onClick={onClose}
               disabled={isSubmitting}
             >
@@ -166,7 +164,6 @@ export default function FeedbackWidget({
             <Button
               type="button"
               size="sm"
-              className="rounded-none"
               disabled={!rating || isSubmitting}
               onClick={() => void handleSubmit()}
             >

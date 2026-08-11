@@ -20,7 +20,7 @@ export default function BackButton({
     <Button
       type="button"
       onClick={onClick}
-      className={cn("group relative overflow-hidden rounded-none pl-10 pr-3", className)}
+      className={cn("group relative overflow-hidden pl-10 pr-3", className)}
       aria-label={label}
     >
       <span className="translate-x-2 transition-opacity duration-500 group-hover:opacity-0">

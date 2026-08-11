@@ -55,7 +55,7 @@ export default function ConfirmCancelButton({
             type="button"
             variant="destructive"
             size="sm"
-            className="h-6 cursor-pointer rounded-none px-2 text-[0.72rem]"
+            className="h-6 cursor-pointer px-2 text-[0.72rem]"
             disabled={disabled || busy}
             onClick={handlePrimaryClick}
             aria-label={busy ? "Cancelling" : isExpanded ? "Confirm cancellation" : "Cancel run"}
@@ -97,7 +97,7 @@ export default function ConfirmCancelButton({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="size-6 cursor-pointer rounded-none"
+                className="size-6 cursor-pointer"
                 onClick={() => setIsExpanded(false)}
                 aria-label="Cancel confirmation"
               >

@@ -9,7 +9,7 @@
     "build": "vite build && tsc -p tsconfig.electron.json && node build/copy-preload.mjs",
     "bundle": "vite build && node build/bundle-electron.mjs",
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
-    "test": "tsc -p tsconfig.electron.json && node --test dist-electron/electron/db/*.test.js dist-electron/electron/job-feed/*.test.js",
+    "test": "tsc -p tsconfig.electron.json && node --test dist-electron/electron/db/*.test.js",
     "dist": "npm run bundle && electron-builder --mac --config electron-builder.yml --publish never",
     "dist:arm64": "npm run bundle && electron-builder --mac --arm64 --config electron-builder.yml --publish never"
   },

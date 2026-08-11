@@ -1,3 +1,4 @@
+export * from "./feed-sync.js";
 export type Platform = "greenhouse" | "lever" | "workday" | "ashby" | "workatastartup" | "generic" | "unknown";
 
 export interface JobPreferenceInput {

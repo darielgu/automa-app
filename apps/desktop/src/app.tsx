@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Skeleton } from "./components/ui/skeleton.js";
-import { classifyFeedSync } from "../electron/job-feed/classify.js";
 import { duration, ease, smoothSpring, stepVariants, swapVariants, toastVariants } from "./lib/motion.js";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -39,6 +38,7 @@ import type {
   RunOutcome,
   UserProfileInput
 } from "@automa/shared-types";
+import { classifyFeedSync } from "@automa/shared-types";
 import {
   AuthLayoutShell,
   Badge,

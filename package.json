@@ -13,7 +13,7 @@
     "dev": "npm run dev -w @automa/desktop",
     "build": "npm run build -w @automa/shared-types -w @automa/job-feed-core -w @automa/automation-engine -w @automa/desktop",
     "check": "npm run check -w @automa/shared-types -w @automa/job-feed-core -w @automa/automation-engine -w @automa/desktop",
-    "test": "npm run test -w @automa/job-feed-core && npm run test:unit -w @automa/automation-engine",
+    "test": "npm run test -w @automa/shared-types && npm run test -w @automa/job-feed-core && npm run test:unit -w @automa/automation-engine",
     "dist": "npm run dist -w @automa/desktop"
   },
   "devDependencies": {

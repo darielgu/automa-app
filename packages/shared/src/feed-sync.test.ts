@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyFeedSync } from "./classify.js";
+import { classifyFeedSync } from "./feed-sync.js";
 
 test("a dead network is not reported as being up to date", () => {
   // This is the bug this function exists to prevent: syncJobFeed resolves

@@ -1,0 +1,23 @@
+node_modules/
+dist/
+dist-electron/
+release/
+*.tsbuildinfo
+
+# Never commit secrets or local machine state
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+
+# Local run artifacts
+output/
+artifacts/
+.playwright-mcp/
+.qa-screens/
+.local/
+.local-postgres/
+
+.DS_Store
+Thumbs.db

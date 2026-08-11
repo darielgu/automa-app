@@ -1,0 +1,5 @@
+# one URL per line
+https://job-boards.greenhouse.io/example/jobs/83446
+https://jobs.lever.co/example/abcdef
+https://example.wd1.myworkdayjobs.com/en-US/careers/job/1234
+https://jobs.ashbyhq.com/example/12345

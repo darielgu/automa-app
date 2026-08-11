@@ -1,0 +1,52 @@
+{
+  "mode": "dry-run",
+  "headless": false,
+  "timeoutMs": 60000,
+  "outputDir": "./output",
+  "screenshotsDir": "./output/screenshots",
+  "resumePath": "./examples/resume.txt",
+  "coverLetterPath": "",
+  "browser": {
+    "cdpUrl": "",
+    "channel": "chrome"
+  },
+  "greenhouse": {
+    "submissionPollSeconds": 180,
+    "textValues": [
+      { "id": "first_name", "value": "Alex" }
+    ],
+    "textareaValues": [],
+    "selectValues": [],
+    "fileValues": []
+  },
+  "ashby": {
+    "submissionPollSeconds": 60,
+    "officeFallbackPolicy": "best_match",
+    "accommodationPolicy": "no_and_fill_followup_na",
+    "accommodationFollowupDefaultText": "N/A",
+    "requireFinalizedRunForVerification": true,
+    "relocationOpenKeywordHints": [],
+    "maxFillPasses": 1,
+    "maxSubmitAttempts": 2,
+    "submitRetryDelayMs": 1200,
+    "textValues": [],
+    "textareaValues": [],
+    "selectValues": [],
+    "fileValues": [],
+    "blockedQuestionPatterns": [],
+    "requiredFieldSelectors": [],
+    "challengeSelectors": [],
+    "confirmationTextPatterns": [],
+    "successUrlPatterns": []
+  },
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "openai": {
+      "apiKeyEnv": "OPENAI_API_KEY"
+    },
+    "ollama": {
+      "baseUrl": "http://localhost:11434"
+    }
+  }
+}

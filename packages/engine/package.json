@@ -1,0 +1,27 @@
+{
+  "name": "@automa/automation-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "npm run build && node --test dist/ai/*.test.js dist/core/*.test.js dist/adapters/company-context.logic.test.js dist/adapters/greenhouse.logic.test.js dist/adapters/lever.integration.test.js dist/adapters/workatastartup.logic.test.js dist/adapters/workday.navigation.logic.test.js dist/adapters/workday.questionnaire.logic.test.js dist/adapters/workday.widget.logic.test.js dist/runner/provider-loop.integration.test.js",
+    "test:dom": "npm run build && node --test dist/adapters/ashby.logic.test.js dist/adapters/ashby.fixture.local.test.js dist/adapters/workday.logic.test.js"
+  },
+  "dependencies": {
+    "openai": "^4.104.0",
+    "playwright-core": "^1.59.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  }
+}

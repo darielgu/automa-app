@@ -1,0 +1,106 @@
+{
+  "workday": {
+    "account": {
+      "email": "alex.rivera@example.com",
+      "password": "ChangeMe123!"
+    },
+    "identity": {
+      "fullName": "Alex Rivera",
+      "firstName": "Alex",
+      "lastName": "Rivera"
+    },
+    "contact": {
+      "email": "alex.rivera@example.com",
+      "phone": "619-289-5672",
+      "phoneType": "Mobile",
+      "address": {
+        "line1": "123 Market St",
+        "city": "San Francisco",
+        "state": "California",
+        "postalCode": "94105",
+        "country": "United States"
+      }
+    },
+    "workAuthorization": {
+      "authorizedInUS": true,
+      "requiresSponsorship": false,
+      "usCitizen": true
+    },
+    "exportControl": {
+      "usPerson": true
+    },
+    "experience": [
+      {
+        "jobTitle": "Senior Software Engineer",
+        "company": "Acme Corp",
+        "location": "San Francisco, CA",
+        "startDateMonth": "01",
+        "startDateYear": "2021",
+        "description": "Built and maintained TypeScript automation systems and web platforms."
+      }
+    ],
+    "education": [
+      {
+        "school": "Example University",
+        "degree": "B.S.",
+        "fieldOfStudy": "Computer Science",
+        "endYear": "2018",
+        "gpa": "3.8"
+      }
+    ],
+    "skills": ["TypeScript", "Node.js", "Playwright", "React"],
+    "links": {
+      "linkedin": "https://linkedin.com/in/alex-rivera",
+      "github": "https://github.com/alex-rivera",
+      "portfolio": "https://alexrivera.example.com"
+    },
+    "files": {
+      "resumePath": "./examples/resume.txt"
+    },
+    "demographics": {
+      "disabilityStatus": "decline"
+    }
+  },
+  "basics": {
+    "firstName": "Alex",
+    "lastName": "Rivera",
+    "fullName": "Alex Rivera",
+    "email": "alex.rivera@example.com",
+    "phone": "619-289-5672",
+    "location": "San Francisco, CA"
+  },
+  "links": {
+    "linkedin": "https://linkedin.com/in/alex-rivera",
+    "github": "https://github.com/alex-rivera",
+    "portfolio": "https://alexrivera.example.com"
+  },
+  "workAuthorization": {
+    "authorizedToWork": true,
+    "requiresSponsorship": false,
+    "clearanceLevel": "none"
+  },
+  "salary": "$180,000-$210,000",
+  "country": "United States",
+  "state": "California",
+  "skillsSummary": "Full-stack engineer with React, TypeScript, Node.js, Python, SQL, AWS, and browser automation.",
+  "education": {
+    "highestDegree": "B.S. Computer Science",
+    "school": "Example University",
+    "degree": "B.S.",
+    "field": "Computer Science",
+    "university": "Example University",
+    "graduationYear": "2018",
+    "gpa": "3.8"
+  },
+  "experience": {
+    "years": 7,
+    "summary": "Full-stack engineer with TypeScript, Node.js, Playwright, and automation focus.",
+    "currentCompany": "Acme Corp",
+    "currentTitle": "Senior Software Engineer"
+  },
+  "customAnswers": {
+    "are you open to relocation": "Yes",
+    "open to relocating anywhere": true,
+    "salary expectation": "$180,000"
+  }
+}

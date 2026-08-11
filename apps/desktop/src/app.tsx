@@ -12,7 +12,6 @@ import {
   FileText,
   Loader2,
   ListChecks,
-  LogOut,
   Mail,
   MessageSquarePlus,
   MoveRight,
@@ -70,11 +69,6 @@ import type { DesktopAutomationConfig, DesktopBrowserDrawerBounds, DesktopResume
 import { cn } from "./lib/utils.js";
 
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
-
-type SessionState = {
-  loading: boolean;
-  user: { id: string; email: string; onboardingCompleted: boolean } | null;
-};
 
 type DesktopState = {
   onboarding?: UserProfileInput;
@@ -673,21 +667,6 @@ const desktopBridge = typeof window !== "undefined" && window.automaDesktop
       onRunCompleted: () => () => undefined
     };
 
-function useSession(desktopState: DesktopState) {
-  return useMemo<SessionState>(() => {
-    const onboarding = desktopState.onboarding;
-    if (!onboarding) return { loading: false, user: null };
-    return {
-      loading: false,
-      user: {
-        id: "local",
-        email: onboarding.basics?.email || "local@automa.app",
-        onboardingCompleted: Boolean(onboarding && desktopState.resume)
-      }
-    };
-  }, [desktopState.onboarding, desktopState.resume]);
-}
-
 function InlineBrowserDrawer({
   run
 }: {
@@ -994,11 +973,11 @@ function SidebarBrand() {
   );
 }
 
-function SidebarFooterPanel({ session }: { session?: SessionState["user"] | null }) {
+function SidebarFooterPanel({ displayName }: { displayName?: string }) {
   const navigate = useNavigate();
   const { isMobile, state } = useSidebar();
   const isCollapsed = !isMobile && state === "collapsed";
-  const profileLabel = session?.email || "Local desktop user";
+  const profileLabel = displayName?.trim() || "Your profile";
   const profileInitial = profileLabel.trim().charAt(0).toUpperCase() || "A";
   const quickActions = [
     {
@@ -1419,7 +1398,7 @@ function JobsPage({
   onboarding,
   appliedJobs,
   refreshToken,
-  sessionUser,
+  displayName,
   onNotify
 }: {
   runs: RunOutcome[];
@@ -1427,7 +1406,7 @@ function JobsPage({
   onboarding?: UserProfileInput;
   appliedJobs: AppliedJobRecord[];
   refreshToken: number;
-  sessionUser?: SessionState["user"] | null;
+  displayName?: string;
   onNotify: (toast: Omit<ToastItem, "id">) => void;
 }) {
   const navigate = useNavigate();
@@ -1679,7 +1658,7 @@ function JobsPage({
       headerTitle="Open roles"
       sidebarHeader={<SidebarBrand />}
       sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedJobs.length} />}
-      sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+      sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
     >
       <section className="desktop-jobs-banner">
         <div className="desktop-jobs-banner__rail" aria-label="Job feed summary">
@@ -1873,12 +1852,12 @@ function JobsPage({
 function RunsPage({
   runs,
   appliedCount,
-  sessionUser,
+  displayName,
   onNotify
 }: {
   runs: RunOutcome[];
   appliedCount: number;
-  sessionUser?: SessionState["user"] | null;
+  displayName?: string;
   onNotify: (toast: Omit<ToastItem, "id">) => void;
 }) {
   const navigate = useNavigate();
@@ -2074,7 +2053,7 @@ function RunsPage({
       headerTitle="Run history"
       sidebarHeader={<SidebarBrand />}
       sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
-      sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+      sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
       headerRight={<Badge variant="secondary" className="rounded-none">{runs.length} runs</Badge>}
     >
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -2249,11 +2228,11 @@ function RunsPage({
 function RunDetailPage({
   runs,
   appliedCount,
-  sessionUser
+  displayName
 }: {
   runs: RunOutcome[];
   appliedCount: number;
-  sessionUser?: SessionState["user"] | null;
+  displayName?: string;
 }) {
   const navigate = useNavigate();
   const { runId } = useParams();
@@ -2267,7 +2246,7 @@ function RunDetailPage({
         headerTitle="Run not found"
         sidebarHeader={<SidebarBrand />}
         sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
-        sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+        sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
       >
         <Card>
           <CardHeader>
@@ -2319,7 +2298,7 @@ function RunDetailPage({
         headerTitle={currentRun.jobTitle || "Automation run"}
         sidebarHeader={<SidebarBrand />}
         sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
-        sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+        sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
         headerIdentityClassName="desktop-run-detail__header-identity"
         headerRight={<Badge variant={badgeVariant} className="rounded-none">{formatRunStatus(currentRun.status)}</Badge>}
       >
@@ -2469,7 +2448,7 @@ function AppliedPage({
   error,
   apiBaseUrl,
   refreshAppliedJobs,
-  sessionUser,
+  displayName,
   onNotify
 }: {
   runs: RunOutcome[];
@@ -2478,7 +2457,7 @@ function AppliedPage({
   error: string | null;
   apiBaseUrl: string;
   refreshAppliedJobs: () => Promise<void>;
-  sessionUser?: SessionState["user"] | null;
+  displayName?: string;
   onNotify: (toast: Omit<ToastItem, "id">) => void;
 }) {
   const navigate = useNavigate();
@@ -2554,7 +2533,7 @@ function AppliedPage({
       headerTitle="Application tracker"
       sidebarHeader={<SidebarBrand />}
       sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedJobs.length} />}
-      sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+      sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
       headerRight={<Badge variant="secondary">{appliedJobs.length} tracked</Badge>}
     >
       <Card className="overflow-hidden">
@@ -2739,13 +2718,13 @@ function ApplicationDetailPage({
   runs,
   appliedCount,
   apiBaseUrl,
-  sessionUser,
+  displayName,
   onNotify
 }: {
   runs: RunOutcome[];
   appliedCount: number;
   apiBaseUrl: string;
-  sessionUser?: SessionState["user"] | null;
+  displayName?: string;
   onNotify: (toast: Omit<ToastItem, "id">) => void;
 }) {
   const navigate = useNavigate();
@@ -2805,7 +2784,7 @@ function ApplicationDetailPage({
         headerTitle="Application"
         sidebarHeader={<SidebarBrand />}
         sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
-        sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+        sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
       >
         <div className="desktop-applied-detail">
           <Card className="overflow-hidden">
@@ -2834,7 +2813,7 @@ function ApplicationDetailPage({
         headerTitle="Application"
         sidebarHeader={<SidebarBrand />}
         sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
-        sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+        sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
       >
         <Card>
           <CardHeader>
@@ -2860,7 +2839,7 @@ function ApplicationDetailPage({
       headerTitle={appliedJob.company}
       sidebarHeader={<SidebarBrand />}
       sidebarNav={<AppSidebar runCount={runs.length} appliedCount={appliedCount} />}
-      sidebarFooter={<SidebarFooterPanel session={sessionUser} />}
+      sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
       headerRight={stageBadge ? <span className={stageBadge.className}>{stageBadge.label}</span> : null}
     >
       <div className="desktop-applied-detail">
@@ -3124,12 +3103,12 @@ function ApplicationDetailPage({
 }
 
 function SettingsPage({
-  session,
+  displayName,
   desktopState,
   setDesktopState,
   appliedCount
 }: {
-  session: SessionState;
+  displayName?: string;
   desktopState: DesktopState;
   setDesktopState: React.Dispatch<React.SetStateAction<DesktopState>>;
   appliedCount: number;
@@ -3147,7 +3126,7 @@ function SettingsPage({
 
   const resumeRecord = desktopState.resume;
   const onboarding = desktopState.onboarding;
-  const profileReady = Boolean(session.user?.onboardingCompleted && onboarding);
+  const profileReady = Boolean(onboarding && resumeRecord?.filePath);
   const resumeReady = Boolean(resumeRecord?.filePath);
   const extractedWordCount = resumeRecord?.extractedText?.trim()
     ? resumeRecord.extractedText.trim().split(/\s+/).filter(Boolean).length
@@ -3239,8 +3218,8 @@ function SettingsPage({
       <div className="desktop-settings-panel-stack">
         <div className="desktop-settings-metrics">
           <div className="desktop-settings-metric">
-            <span className="desktop-settings-metric__label">Signed in</span>
-            <strong className="desktop-settings-metric__value">{session.user?.email || "Unavailable"}</strong>
+            <span className="desktop-settings-metric__label">Resume</span>
+            <strong className="desktop-settings-metric__value">{resumeReady ? "Attached" : "Missing"}</strong>
           </div>
           <div className="desktop-settings-metric">
             <span className="desktop-settings-metric__label">Profile</span>
@@ -3255,23 +3234,16 @@ function SettingsPage({
         <div className="desktop-settings-section-grid">
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>Automa account</CardTitle>
-              <CardDescription>Session details tied to the currently configured API workspace.</CardDescription>
+              <CardTitle>This device</CardTitle>
+              <CardDescription>Automa has no account and no server. Everything below is local.</CardDescription>
             </CardHeader>
             <CardContent className="desktop-settings-stack">
               <div className="desktop-settings-list">
                 <div className="desktop-settings-list__row">
-                  <span className="desktop-settings-list__label">Email</span>
+                  <span className="desktop-settings-list__label">Your data</span>
                   <div className="desktop-settings-list__value-block">
-                    <strong>{session.user?.email || "Unavailable"}</strong>
-                    <span>Signed into the desktop app on this machine.</span>
-                  </div>
-                </div>
-                <div className="desktop-settings-list__row">
-                  <span className="desktop-settings-list__label">API workspace</span>
-                  <div className="desktop-settings-list__value-block">
-                    <strong>{config.apiBaseUrl}</strong>
-                    <span>All authenticated product requests route through this origin.</span>
+                    <strong>Stored on this Mac</strong>
+                    <span>Your profile, resume and answers never leave the machine except to the application you apply to.</span>
                   </div>
                 </div>
                 <div className="desktop-settings-list__row">
@@ -3622,18 +3594,7 @@ function SettingsPage({
       headerTitle="Settings"
       sidebarHeader={<SidebarBrand />}
       sidebarNav={<AppSidebar runCount={desktopState.runs.length} appliedCount={appliedCount} />}
-      sidebarFooter={<SidebarFooterPanel session={session.user} />}
-      headerRight={
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-none"
-          onClick={() => window.location.reload()}
-        >
-          <LogOut className="size-4" />
-          Sign out
-        </Button>
-      }
+      sidebarFooter={<SidebarFooterPanel displayName={displayName} />}
     >
       <div className="desktop-settings-shell">
         <section className="desktop-settings-content">
@@ -3648,10 +3609,9 @@ function SettingsPage({
 }
 
 function ProtectedRoutes({
-  session,
+  displayName,
   desktopState,
   setDesktopState,
-  hydratingProfile,
   appliedJobs,
   appliedLoading,
   appliedError,
@@ -3659,10 +3619,9 @@ function ProtectedRoutes({
   jobsRefreshToken,
   onNotify
 }: {
-  session: SessionState;
+  displayName?: string;
   desktopState: DesktopState;
   setDesktopState: React.Dispatch<React.SetStateAction<DesktopState>>;
-  hydratingProfile: boolean;
   appliedJobs: AppliedJobRecord[];
   appliedLoading: boolean;
   appliedError: string | null;
@@ -3671,9 +3630,6 @@ function ProtectedRoutes({
   onNotify: (toast: Omit<ToastItem, "id">) => void;
 }) {
   const location = useLocation();
-  if (session.loading || hydratingProfile) {
-    return <div className="flex min-h-screen items-center justify-center">Loading…</div>;
-  }
   // No accounts: the only gate is whether first-run setup is done.
   if ((!desktopState.onboarding || !desktopState.resume) && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
@@ -3694,13 +3650,13 @@ function ProtectedRoutes({
             onboarding={desktopState.onboarding}
             appliedJobs={appliedJobs}
             refreshToken={jobsRefreshToken}
-            sessionUser={session.user}
+            displayName={displayName}
             onNotify={onNotify}
           />
         }
       />
-      <Route path="/runs" element={<RunsPage runs={desktopState.runs} appliedCount={appliedJobs.length} sessionUser={session.user} onNotify={onNotify} />} />
-      <Route path="/runs/:runId" element={<RunDetailPage runs={desktopState.runs} appliedCount={appliedJobs.length} sessionUser={session.user} />} />
+      <Route path="/runs" element={<RunsPage runs={desktopState.runs} appliedCount={appliedJobs.length} displayName={displayName} onNotify={onNotify} />} />
+      <Route path="/runs/:runId" element={<RunDetailPage runs={desktopState.runs} appliedCount={appliedJobs.length} displayName={displayName} />} />
       <Route
         path="/applied"
         element={
@@ -3711,7 +3667,7 @@ function ProtectedRoutes({
             error={appliedError}
             apiBaseUrl={desktopState.config.apiBaseUrl}
             refreshAppliedJobs={refreshAppliedJobs}
-            sessionUser={session.user}
+            displayName={displayName}
             onNotify={onNotify}
           />
         }
@@ -3723,14 +3679,14 @@ function ProtectedRoutes({
             runs={desktopState.runs}
             appliedCount={appliedJobs.length}
             apiBaseUrl={desktopState.config.apiBaseUrl}
-            sessionUser={session.user}
+            displayName={displayName}
             onNotify={onNotify}
           />
         }
       />
       <Route
         path="/settings"
-        element={<SettingsPage session={session} desktopState={desktopState} setDesktopState={setDesktopState} appliedCount={appliedJobs.length} />}
+        element={<SettingsPage displayName={displayName} desktopState={desktopState} setDesktopState={setDesktopState} appliedCount={appliedJobs.length} />}
       />
       <Route path="*" element={<Navigate to="/jobs" replace />} />
     </Routes>
@@ -3739,8 +3695,6 @@ function ProtectedRoutes({
 
 export function App() {
   const [desktopState, setDesktopState] = useDesktopState();
-  const session = useSession(desktopState);
-  const [hydratingProfile, setHydratingProfile] = useState(false);
   const [jobsRefreshToken, setJobsRefreshToken] = useState(0);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const activeVisibleRun = useMemo(() => getActiveVisibleRun(desktopState.runs), [desktopState.runs]);
@@ -3749,7 +3703,15 @@ export function App() {
     loading: appliedLoading,
     error: appliedError,
     refresh: refreshAppliedJobs
-  } = useAppliedJobs(desktopState.config.apiBaseUrl, Boolean(session.user));
+  } = useAppliedJobs(desktopState.config.apiBaseUrl, Boolean(desktopState.onboarding));
+
+  const displayName =
+    desktopState.onboarding?.basics?.fullName?.trim() ||
+    [desktopState.onboarding?.basics?.firstName, desktopState.onboarding?.basics?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    undefined;
 
   function pushToast(toast: Omit<ToastItem, "id">) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -3759,15 +3721,6 @@ export function App() {
     }, 4200);
   }
 
-  useEffect(() => {
-    if (session.loading || !session.user?.onboardingCompleted || desktopState.onboarding || hydratingProfile) {
-      return;
-    }
-
-    // Nothing to hydrate: the profile is written to disk by the main process
-    // and arrives with desktop:get-state.
-    setHydratingProfile(false);
-  }, [desktopState.onboarding, session.loading, session.user]);
 
   useEffect(() => {
     return desktopBridge.onRunCompleted((payload: RunCompletionEvent) => {
@@ -3787,10 +3740,9 @@ export function App() {
           path="/*"
           element={
             <ProtectedRoutes
-              session={session}
+              displayName={displayName}
               desktopState={desktopState}
               setDesktopState={setDesktopState}
-              hydratingProfile={hydratingProfile}
               appliedJobs={appliedJobs}
               appliedLoading={appliedLoading}
               appliedError={appliedError}

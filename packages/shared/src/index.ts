@@ -1,21 +1,4 @@
-export type AuthProvider = "google" | "password";
 export type Platform = "greenhouse" | "lever" | "workday" | "ashby" | "workatastartup" | "generic" | "unknown";
-
-export interface UserIdentity {
-  id: string;
-  email: string;
-  fullName: string;
-  onboardingCompleted: boolean;
-  isAdmin?: boolean;
-  linkedProviders: AuthProvider[];
-  createdAt: string;
-}
-
-export interface AuthSession {
-  user: UserIdentity;
-  token: string;
-  expiresAt: string;
-}
 
 export interface JobPreferenceInput {
   desiredRoles: string[];

@@ -501,11 +501,15 @@ function normalizeState(value: unknown): DesktopState {
   const source = value as Partial<DesktopState>;
   const schedulerDefaults = buildDefaultSchedulerState();
   const sourceScheduler = source.scheduler;
+  // apiBaseUrl named a server this project never had. Dropping it here stops it
+  // being written back out on every save and living forever in configs upgraded
+  // from an older build.
+  const { apiBaseUrl: _removedApiBaseUrl, ...storedConfig } = (source.config ?? {}) as Record<string, unknown>;
   const rawConfig = {
     ...defaults,
-    ...(source.config ?? {})
+    ...(storedConfig as Partial<DesktopAutomationConfig>)
   };
-  // Enforce server-side AI routing for all LLM-enabled desktop runs.
+  // Older builds saved aiProvider: "automa_api", which no longer exists.
   const migratedAiProvider = normalizeDesktopAiProvider(rawConfig.aiProvider);
   return {
     onboarding: source.onboarding,

@@ -1,7 +1,7 @@
 {
   "name": "automa",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Local-first desktop app that fills out job applications on your own machine.",
   "license": "MIT",

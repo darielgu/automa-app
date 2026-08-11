@@ -51,8 +51,15 @@ if (!page) {
 }
 
 /** A run is resolved when the adapter reached the form and filled real fields. */
+const TERMINAL = ["completed", "failed", "cancelled", "skipped"];
+
 function classify(run) {
   const fields = (run.filledFields || []).filter((f) => !String(f.id || "").startsWith("__"));
+  // A run that never finished is not a run that filled nothing. Reporting it as
+  // "no_identity_fields" hides the real problem, which is duration.
+  if (!TERMINAL.includes(run.status)) {
+    return { resolved: false, reason: `still_${run.status}_after_wait`, fields: fields.length };
+  }
   const identity = fields.filter((f) => /first|last|name|email|phone/i.test(`${f.label} ${f.id}`));
   if (run.status === "failed") return { resolved: false, reason: run.submitOutcome || "failed", fields: fields.length };
   if (run.status === "skipped") return { resolved: false, reason: run.submitOutcome || "skipped", fields: fields.length };
@@ -94,11 +101,14 @@ for (const platform of targets) {
 
     // Runs are executed by the main process; poll its state file rather than
     // the renderer, which only mirrors what it has been told.
+    // Real application forms take minutes, not seconds: a Greenhouse posting
+    // with a dozen custom questions and two comboboxes is normal. Too short a
+    // wait reports "timeout" for runs that were about to succeed.
     let run = null;
-    for (let i = 0; i < 150; i += 1) {
+    for (let i = 0; i < 360; i += 1) {
       await new Promise((r) => setTimeout(r, 2000));
       run = readState().runs.find((entry) => entry.id === runId);
-      if (run && ["completed", "failed", "cancelled", "skipped"].includes(run.status)) break;
+      if (run && TERMINAL.includes(run.status)) break;
     }
     const verdict = run ? classify(run) : { resolved: false, reason: "timeout", fields: 0 };
     results.push({ platform, job, verdict, run });

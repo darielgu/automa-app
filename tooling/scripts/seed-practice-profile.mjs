@@ -35,6 +35,16 @@ const profile = JSON.parse(
 // so the harness would be exercising a configuration no user ever has.
 profile.files = { ...(profile.files ?? {}), resumePath };
 
+// Real forms validate against real data. "Example University" is not on any
+// school list a real application offers, so leaving it in measures the fixture
+// rather than the adapter: the run burns its retries failing to match a value
+// that could never match. A real candidate has a real school.
+profile.education = {
+  ...(profile.education ?? {}),
+  school: "University of California, Berkeley",
+  university: "University of California, Berkeley"
+};
+
 profile.preferences ??= {
   desiredRoles: ["Software Engineer"],
   desiredLocations: ["Remote"],

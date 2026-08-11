@@ -1726,3 +1726,33 @@ test("reconcile required skips already-valid demographic combobox instead of ove
 
   assert.deepEqual(selectedAnswers, []);
 });
+
+test("declining to self-identify matches however the site words it", () => {
+  // Observed on live Greenhouse postings. The rules engine always answers
+  // "Decline to self-identify"; none of these forms use that phrase, and a
+  // substring matcher found nothing, so four required questions per form went
+  // unanswered and were then retried until the run gave up.
+  const wordings = [
+    ["I don't wish to answer", "Male", "Female"],
+    ["Prefer not to say", "Yes", "No"],
+    ["I do not wish to disclose", "Veteran", "Not a veteran"],
+    ["Choose not to disclose", "Yes, I have a disability", "No"],
+    ["Decline To Self Identify", "Hispanic or Latino", "White"]
+  ];
+  for (const options of wordings) {
+    assert.equal(
+      pickBestOption("Decline to self-identify", options),
+      options[0],
+      `should have matched ${options[0]}`
+    );
+  }
+});
+
+test("declining never invents an answer when the form offers no way to decline", () => {
+  // An ethnicity question whose only options are Yes and No cannot be declined.
+  // Picking one would be Automa answering a demographic question on the user's
+  // behalf, which is the one thing it must never do.
+  const picked = pickBestOption("Decline to self-identify", ["Yes", "No"]);
+  assert.equal(picked, "Decline to self-identify");
+  assert.equal(["Yes", "No"].includes(picked), false);
+});

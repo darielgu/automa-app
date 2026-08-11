@@ -110,6 +110,22 @@ function coerceBoolean(value: string | boolean | string[] | number | undefined):
   return undefined;
 }
 
+/**
+ * The candidate's postal code, wherever it happens to be recorded.
+ *
+ * Greenhouse asks "Zip / Postal" on most of its forms and nothing mapped it, so
+ * a profile that already held 94105 answered it as unknown and the adapter
+ * retried the field until it gave up. The Workday block is the only structured
+ * address in the schema, which is why it is read here rather than duplicated.
+ */
+function preferredPostalCode(profile: CandidateProfile): string | undefined {
+  const workdayPostal = profile.workday?.contact?.address?.postalCode?.trim();
+  if (workdayPostal) return workdayPostal;
+  // Fall back to a postal code sitting inside a free-text location.
+  const fromLocation = (profile.basics.location ?? "").match(/\b\d{5}(?:-\d{4})?\b/);
+  return fromLocation?.[0];
+}
+
 function preferredBasedLocation(profile: CandidateProfile): string | undefined {
   const rawLocation = profile.basics.location?.trim() ?? "";
   const city = rawLocation
@@ -617,6 +633,13 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
 
 export function evaluateProfileMapping(question: ApplicationQuestion, profile: CandidateProfile): RuleEvaluation {
   const normalized = normalize(question.label);
+
+  if (includesAny(normalized, [/zip/, /postal/, /post code/, /postcode/])) {
+    const postal = preferredPostalCode(profile);
+    if (postal) {
+      return { answer: postal, source: "profile", reason: "postal_code" };
+    }
+  }
 
   if (includesAny(normalized, [/eu/, /european union/, /member state/, /eu\/efta/]) && includesAny(normalized, [/citizen/, /citizenship/, /nationality/])) {
     const explicitEuCitizen = coerceBoolean(findCustomAnswer(profile, [/eu/, /european union/, /member state/, /eu\/efta/]));

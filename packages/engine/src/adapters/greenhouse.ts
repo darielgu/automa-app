@@ -402,6 +402,36 @@ export function pickBestOption(answer: string, options: string[]): string {
   return answer;
 }
 
+/**
+ * Ways real forms write "I would rather not say".
+ *
+ * The rules engine answers self-identification questions with "Decline to
+ * self-identify" -- deliberately, because Automa must never invent a person's
+ * race, gender, veteran or disability status. But almost no site uses that
+ * exact wording, and the matcher below is substring-based, so
+ * "Decline to self-identify" against an option list offering
+ * "I don't wish to answer" found nothing. Measured against live Greenhouse
+ * postings, that single mismatch left four required questions unanswered on
+ * every form.
+ */
+const DECLINE_PATTERNS: RegExp[] = [
+  /decline/,
+  /prefer not/,
+  /do ?n[o']?t wish/,
+  /not wish to (answer|disclose|identify|self)/,
+  /choose not to/,
+  /rather not/,
+  /not to disclose/,
+  /prefer to not/,
+  /no response/,
+  /wish not to/
+];
+
+function isDeclineOption(value: string): boolean {
+  const normalized = normalizeText(value);
+  return DECLINE_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 function findBestOptionMatch(answer: string, options: string[]): string | undefined {
   if (!options.length) return answer;
   const validOptions = options.filter((option) => !isPlaceholderOption(option));
@@ -416,6 +446,13 @@ function findBestOptionMatch(answer: string, options: string[]): string | undefi
 
   const reverseContains = searchPool.find((option) => wanted.includes(normalizeText(option)));
   if (reverseContains) return reverseContains;
+
+  // Intent match, not text match: every phrasing of "I would rather not say"
+  // means the same thing, and the site chooses the words.
+  if (isDeclineOption(answer)) {
+    const declineOption = searchPool.find((option) => isDeclineOption(option));
+    if (declineOption) return declineOption;
+  }
 
   const answerNumberMatch = answer.match(/-?\d+(?:\.\d+)?/);
   if (answerNumberMatch) {
@@ -3898,6 +3935,21 @@ export class GreenhouseAdapter extends BaseAdapter {
     }
 
     const attemptedFieldKeys = new Set<string>();
+    /**
+     * Fields proven to have no possible answer, so they are not worked again.
+     *
+     * A required question is unanswerable when the profile has nothing for it,
+     * or when the value it does have is absent from the option list the site
+     * offers. Neither changes between repair passes -- nothing on the page or
+     * in the profile moves -- so retrying is pure cost. Against a real
+     * Greenhouse posting that cost was measured at roughly eight seconds per
+     * dropdown probe, and one application spent sixteen minutes re-probing the
+     * same six questions it could never answer.
+     *
+     * These are the questions a person has to finish, which is exactly what the
+     * run should report rather than grind on.
+     */
+    const unanswerableFieldIds = new Set<string>();
     let previousMissingSignature = "";
     let noProgressCycles = 0;
 
@@ -3923,6 +3975,7 @@ export class GreenhouseAdapter extends BaseAdapter {
       previousMissingSignature = missingSignature;
 
       for (const field of missing) {
+        if (unanswerableFieldIds.has(field.id)) continue;
         let applied = false;
         const validationStateBefore = await this.inspectRequiredValidationState(page, {
           id: field.id,
@@ -4151,6 +4204,7 @@ export class GreenhouseAdapter extends BaseAdapter {
                   if (matchedCurrent) {
                     normalizedAnswer = matchedCurrent;
                   } else {
+                    unanswerableFieldIds.add(field.id);
                     aiContext?.logger?.info("greenhouse_required_option_unresolved", {
                       fieldId: field.id,
                       label: field.label,
@@ -4163,6 +4217,7 @@ export class GreenhouseAdapter extends BaseAdapter {
                     continue;
                   }
                 } else {
+                  unanswerableFieldIds.add(field.id);
                   aiContext?.logger?.info("greenhouse_required_option_unresolved", {
                     fieldId: field.id,
                     label: field.label,
@@ -4213,6 +4268,10 @@ export class GreenhouseAdapter extends BaseAdapter {
               inputKind: expectedKind
             });
           }
+          // Every strategy ran and the value still did not land. The page and
+          // the profile are both unchanged, so the next pass would do the same
+          // work for the same result; stop paying for it.
+          if (!applied || !verified) unanswerableFieldIds.add(field.id);
           if (aiContext?.logger) {
             aiContext.logger.info("greenhouse_required_repair_result", {
               fieldId: field.id,

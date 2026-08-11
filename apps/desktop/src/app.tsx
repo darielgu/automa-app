@@ -491,6 +491,145 @@ function getActiveVisibleRun(runs: RunOutcome[]) {
   return runs.find((run) => run.status === "running" && run.browserVisible);
 }
 
+// ---------------------------------------------------------------------------
+// Local data bridge
+//
+// Every screen used to talk HTTP to a Fastify server. There is no server now:
+// these adapters convert what the main process returns over IPC into the shapes
+// the screens already render, so the UI did not have to be rewritten.
+// ---------------------------------------------------------------------------
+
+type TrackerStageName = "saved" | "applied" | "interviewing" | "offer" | "rejected";
+
+interface LocalJobRecord {
+  simplifyId: string;
+  company: string;
+  title: string;
+  url: string;
+  platform: string;
+  automatable: boolean;
+  category: string | null;
+  locations: string[];
+  terms: string[];
+  sponsorship: string | null;
+  datePosted: number | null;
+  feedback: "liked" | "hidden" | "saved" | null;
+  applied: boolean;
+}
+
+interface LocalAppliedRecord {
+  id: string;
+  jobId: string;
+  runId: string | null;
+  sourceUrl: string;
+  title: string;
+  company: string;
+  location: string;
+  source: string;
+  stage: TrackerStageName;
+  notes: string;
+  appliedAt: string;
+  updatedAt: string;
+}
+
+interface LocalBridge {
+  listJobs(query: Record<string, unknown>): Promise<{ jobs: LocalJobRecord[]; total: number }>;
+  setJobFeedback(jobId: string, verdict: "liked" | "hidden" | "saved" | null): Promise<boolean>;
+  syncJobs(force?: boolean): Promise<unknown>;
+  jobsStatus(): Promise<unknown>;
+  listApplied(): Promise<LocalAppliedRecord[]>;
+  moveApplied(id: string, stage: TrackerStageName, note?: string): Promise<unknown>;
+  setAppliedNotes(id: string, notes: string): Promise<boolean>;
+  appliedTimeline(id: string): Promise<Array<{ from: string | null; to: string; note: string; at: string }>>;
+  startGuest(): Promise<DesktopState>;
+  isGuest(): Promise<boolean>;
+}
+
+const bridge = (typeof window !== "undefined" && window.automaDesktop
+  ? (window.automaDesktop as unknown as LocalBridge)
+  : {
+      listJobs: async () => ({ jobs: [], total: 0 }),
+      setJobFeedback: async () => true,
+      syncJobs: async () => undefined,
+      jobsStatus: async () => undefined,
+      listApplied: async () => [],
+      moveApplied: async () => undefined,
+      setAppliedNotes: async () => true,
+      appliedTimeline: async () => [],
+      startGuest: async () => ({ runs: [], config: createFallbackConfig() }) as DesktopState,
+      isGuest: async () => false
+    }) as LocalBridge;
+
+/** A stored job as the jobs screen wants it. */
+function toJobFeedItem(job: LocalJobRecord): JobFeedItem {
+  const tags = [job.category, ...job.terms].filter((tag): tag is string => Boolean(tag));
+  return {
+    id: job.simplifyId,
+    sourceUrl: job.url,
+    title: job.title,
+    company: job.company,
+    location: job.locations[0] ?? "",
+    source: job.platform,
+    postedAt: job.datePosted ? new Date(job.datePosted * 1000).toISOString() : undefined,
+    // Say plainly whether an adapter can drive this one. About 40% of listings
+    // are company career sites where the generic adapter often needs a human,
+    // and implying otherwise would set the wrong expectation.
+    summary: job.automatable
+      ? `Automa can fill this ${formatProviderLabel(job.platform)} application.`
+      : "Company career site. Automa will fill what it can, but you may need to finish it.",
+    compensation: job.sponsorship ?? undefined,
+    roleTags: tags.slice(0, 6),
+    feedReason: "role_match",
+    feedback: job.feedback === "liked" ? "up" : job.feedback === "hidden" ? "down" : null
+  };
+}
+
+function toAppliedRecord(applied: LocalAppliedRecord): AppliedJobRecord {
+  return {
+    id: applied.id,
+    userId: "local",
+    jobId: applied.jobId,
+    runId: applied.runId ?? "",
+    sourceUrl: applied.sourceUrl,
+    title: applied.title,
+    company: applied.company,
+    location: applied.location,
+    source: applied.source,
+    appliedAt: applied.appliedAt,
+    trackerStage: applied.stage as ApplicationTrackerStage,
+    trackerOrder: 0
+  } as AppliedJobRecord;
+}
+
+/** Rebuilds the detail view from the tracker row plus its stage history. */
+async function loadApplicationDetail(appliedJobId: string) {
+  const [applied, timeline] = await Promise.all([
+    bridge.listApplied(),
+    bridge.appliedTimeline(appliedJobId)
+  ]);
+  const row = applied.find((entry) => entry.id === appliedJobId);
+  if (!row) return null;
+
+  let stored: { insightsSummary?: string; contactTargets?: unknown[]; messageDrafts?: unknown[] } = {};
+  try {
+    stored = row.notes ? JSON.parse(row.notes) : {};
+  } catch {
+    stored = {};
+  }
+
+  return {
+    appliedJob: toAppliedRecord(row),
+    insightsSummary: stored.insightsSummary ?? "",
+    contactTargets: (stored.contactTargets ?? []) as ApplicationContactTarget[],
+    messageDrafts: (stored.messageDrafts ?? []) as ApplicationMessageDraft[],
+    timeline: timeline.map((entry) => ({
+      stage: entry.to,
+      note: entry.note,
+      occurredAt: entry.at
+    }))
+  } as never;
+}
+
 const desktopBridge = typeof window !== "undefined" && window.automaDesktop
   ? window.automaDesktop
   : {
@@ -523,126 +662,19 @@ const desktopBridge = typeof window !== "undefined" && window.automaDesktop
       onRunCompleted: () => () => undefined
     };
 
-function GoogleGlyph() {
-  return (
-    <svg aria-hidden viewBox="0 0 24 24" className="auth-google-mark">
-      <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.55-.2-2.27H12v4.3h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.27-2.09 3.57-5.18 3.57-8.65Z" />
-      <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.87-3c-1.07.72-2.44 1.15-4.08 1.15-3.14 0-5.8-2.12-6.75-4.98H1.25v3.09A12 12 0 0 0 12 24Z" />
-      <path fill="#FBBC05" d="M5.25 14.26A7.2 7.2 0 0 1 4.87 12c0-.79.14-1.55.38-2.26V6.65H1.25A12 12 0 0 0 0 12c0 1.93.46 3.76 1.25 5.35l4-3.09Z" />
-      <path fill="#EA4335" d="M12 4.77c1.76 0 3.35.6 4.6 1.79l3.45-3.45C17.95 1.04 15.23 0 12 0A12 12 0 0 0 1.25 6.65l4 3.09c.95-2.86 3.61-4.97 6.75-4.97Z" />
-    </svg>
-  );
-}
-
-function AuthField({
-  label,
-  children
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="auth-field">
-      <span className="auth-field__label">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function PasswordField({
-  label,
-  value,
-  onChange,
-  placeholder = "Password"
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}) {
-  const [visible, setVisible] = useState(false);
-
-  return (
-    <AuthField label={label}>
-      <div className="auth-password-field">
-        <Input
-          type={visible ? "text" : "password"}
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="rounded-none pr-12"
-          required
-        />
-        <button
-          type="button"
-          className="auth-password-toggle"
-          onClick={() => setVisible((current) => !current)}
-          aria-label={visible ? "Hide password" : "Show password"}
-        >
-          {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-        </button>
-      </div>
-    </AuthField>
-  );
-}
-
-function AuthFeatureRail({
-  eyebrow,
-  headline,
-  points
-}: {
-  eyebrow: string;
-  headline: string;
-  points: string[];
-}) {
-  return (
-    <div className="auth-context">
-      <div className="auth-context__intro">
-        <Badge variant="secondary" className="w-fit rounded-none">Desktop first</Badge>
-        <div className="auth-context__headline">{headline}</div>
-        <div className="auth-context__copy">{eyebrow}</div>
-      </div>
-      <div className="auth-context__summary">
-        <div className="auth-context__summary-card">
-          <span>Session routing</span>
-          <strong>Desktop owns the browser handoff</strong>
-        </div>
-        <div className="auth-context__summary-card">
-          <span>Profile state</span>
-          <strong>Resume and runtime stay on this machine</strong>
-        </div>
-      </div>
-      <div className="auth-context__points">
-        {points.map((point) => (
-          <div key={point} className="auth-context__point">
-            <span className="auth-context__point-marker" />
-            <span>{point}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function useSession(apiBaseUrl: string) {
-  const [state, setState] = useState<SessionState>({ loading: true, user: null });
-
-  useEffect(() => {
-    fetch(`${apiBaseUrl}/me`, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json();
-      })
-      .then((data) => {
-        setState({
-          loading: false,
-          user: data?.user ?? null
-        });
-      })
-      .catch(() => setState({ loading: false, user: null }));
-  }, [apiBaseUrl]);
-
-  return state;
+function useSession(desktopState: DesktopState) {
+  return useMemo<SessionState>(() => {
+    const onboarding = desktopState.onboarding;
+    if (!onboarding) return { loading: false, user: null };
+    return {
+      loading: false,
+      user: {
+        id: "local",
+        email: onboarding.basics?.email || "local@automa.app",
+        onboardingCompleted: Boolean(onboarding && desktopState.resume)
+      }
+    };
+  }, [desktopState.onboarding, desktopState.resume]);
 }
 
 function InlineBrowserDrawer({
@@ -771,13 +803,9 @@ function useAppliedJobs(apiBaseUrl: string, enabled: boolean) {
 
     setState((current) => ({ ...current, loading: true, error: null }));
     try {
-      const response = await fetch(`${apiBaseUrl}/applied`, { credentials: "include" });
-      if (!response.ok) {
-        throw new Error("Unable to load applied jobs.");
-      }
-      const payload = await response.json();
+      const applied = await bridge.listApplied();
       setState({
-        appliedJobs: Array.isArray(payload.applied) ? payload.applied : [],
+        appliedJobs: applied.map(toAppliedRecord),
         loading: false,
         error: null
       });
@@ -815,15 +843,9 @@ function useAppliedJobDetail(apiBaseUrl: string, appliedJobId: string | undefine
 
     setState((current) => ({ ...current, loading: true, error: null }));
     try {
-      const response = await fetch(`${apiBaseUrl}/applied/${appliedJobId}`, {
-        credentials: "include"
-      });
-      if (!response.ok) {
-        throw new Error("Unable to load tracked application.");
-      }
-      const payload = await response.json();
+      const application = await loadApplicationDetail(appliedJobId);
       setState({
-        application: payload.application ?? null,
+        application,
         loading: false,
         error: null
       });
@@ -1052,292 +1074,341 @@ function SidebarFooterPanel({ session }: { session?: SessionState["user"] | null
   );
 }
 
-function SignInPage({ apiBaseUrl }: { apiBaseUrl: string }) {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+type OnboardingStep = 0 | 1 | 2;
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
+const ONBOARDING_STEPS = [
+  { title: "About you", hint: "Used to fill the name, email and phone fields every application asks for." },
+  { title: "Eligibility and education", hint: "Answers the work authorization and school questions." },
+  { title: "Resume", hint: "Uploaded to the application and used to answer written questions." }
+] as const;
+
+/**
+ * First run. There is no sign-in, so this is the only gate: fill in a profile,
+ * or load the demo persona and skip straight to the product.
+ */
+function OnboardingPage({
+  desktopState,
+  setDesktopState,
+  onNotify
+}: {
+  desktopState: DesktopState;
+  setDesktopState: React.Dispatch<React.SetStateAction<DesktopState>>;
+  onNotify: (toast: Omit<ToastItem, "id">) => void;
+}) {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<OnboardingStep>(0);
+  const [profile, setProfile] = useState<UserProfileInput>(() => normalizeProfile(desktopState.onboarding));
+  const [resume, setResume] = useState<DesktopResumeRecord | undefined>(desktopState.resume);
+  const [busy, setBusy] = useState<null | "guest" | "resume" | "save">(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const setBasics = (patch: Partial<UserProfileInput["basics"]>) =>
+    setProfile((prev) => ({ ...prev, basics: { ...prev.basics, ...patch } }));
+
+  const startGuest = async () => {
+    setBusy("guest");
     setError(null);
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/sign-in/email`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+      const state = await (desktopBridge as unknown as { startGuest: () => Promise<DesktopState> }).startGuest();
+      setDesktopState(state);
+      onNotify({
+        tone: "success",
+        message: "Demo profile loaded. Alex Rivera is fictional, and demo runs never submit."
       });
-      if (!response.ok) {
-        setError("Unable to sign in.");
-        return;
-      }
-      navigate("/jobs");
-      window.location.reload();
+      navigate("/jobs", { replace: true });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load the demo profile.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
-  }
+  };
+
+  const pickResume = async () => {
+    setBusy("resume");
+    setError(null);
+    try {
+      const picked = await desktopBridge.pickResume();
+      if (!picked) return;
+      setResume(picked);
+      // Parsing is a convenience: it pre-fills fields the user can correct. A
+      // parse failure must never block finishing onboarding.
+      try {
+        const draft = await desktopBridge.parseResume();
+        if (draft?.profile) {
+          setProfile((prev) => mergeParsedProfile(prev, draft.profile));
+          if (draft.warnings?.length) {
+            onNotify({ tone: "neutral", message: `Resume read with warnings: ${draft.warnings[0]}` });
+          }
+        }
+      } catch {
+        onNotify({
+          tone: "neutral",
+          message: "Could not read the resume text. The file is attached; you can fill the fields yourself."
+        });
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not open that file.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const finish = async () => {
+    setBusy("save");
+    setError(null);
+    try {
+      const saved = await desktopBridge.saveOnboarding(profile);
+      setDesktopState((prev) => ({ ...prev, onboarding: (saved as UserProfileInput | undefined) ?? profile, resume }));
+      navigate("/jobs", { replace: true });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save your profile.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const stepValid = (() => {
+    if (step === 0) return Boolean(profile.basics.firstName.trim() && profile.basics.lastName.trim() && profile.basics.email.trim());
+    if (step === 1) return Boolean(profile.education.school || profile.education.university);
+    return Boolean(resume?.filePath);
+  })();
+
+  const current = ONBOARDING_STEPS[step];
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,oklch(0.72_0.2_41_/_0.18),transparent_30%),radial-gradient(circle_at_bottom_right,oklch(0.67_0.21_41_/_0.14),transparent_26%)]"
-      />
-      <div className="relative flex min-h-[100dvh] flex-col">
-        <header className="border-b border-[var(--grid-line)] bg-background/88 backdrop-blur-md">
-          <div className="mx-auto flex w-full max-w-[118rem] items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-            <button type="button" onClick={() => navigate("/landing")} className="flex items-center gap-3">
-              <div className="relative h-7 w-[7.5rem] shrink-0">
-                <img src="/Automa-B-NBG.png" alt="Automa" className="h-full w-full object-contain dark:hidden" />
-                <img src="/Automa-NBG.png" alt="Automa" className="hidden h-full w-full object-contain dark:block" />
-              </div>
-            </button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => navigate("/sign-up")}>
-              <span className="tracking-[0.16em] uppercase">Create account</span>
-            </Button>
-          </div>
+    <div className="onboarding-shell">
+      <div className="onboarding-panel">
+        <header className="onboarding-header">
+          <span className="onboarding-eyebrow">Automa</span>
+          <h1 className="onboarding-title">Set up your profile</h1>
+          <p className="onboarding-subtitle">
+            Everything stays on this Mac. There is no account and nothing is uploaded.
+          </p>
         </header>
 
-        <div className="mx-auto flex w-full max-w-[118rem] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-          <section className="grid min-h-[calc(100vh-10rem)] w-full gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="flex min-h-[36rem] flex-col justify-center border border-border bg-background px-6 py-8 sm:px-10 lg:px-12">
-              <div className="flex max-w-2xl flex-col gap-8">
-                <div className="flex flex-col gap-4">
-                  <h1 className="text-4xl leading-none tracking-[-0.06em] sm:text-5xl lg:text-6xl">Welcome back</h1>
-                  <p className="max-w-xl text-sm leading-7 text-muted-foreground sm:text-base">
-                    Sign in to continue your local-first job search workspace.
-                  </p>
-                </div>
-                <AsciiLogoViewer className="min-h-[20rem] p-0 sm:min-h-[24rem]" preClassName="text-primary" />
-              </div>
-            </div>
+        <ol className="onboarding-steps" aria-label="Onboarding progress">
+          {ONBOARDING_STEPS.map((entry, index) => (
+            <li
+              key={entry.title}
+              className="onboarding-step"
+              data-state={index === step ? "current" : index < step ? "done" : "upcoming"}
+            >
+              <span className="onboarding-step__index">{index + 1}</span>
+              <span className="onboarding-step__label">{entry.title}</span>
+            </li>
+          ))}
+        </ol>
 
-            <div className="flex min-h-[36rem] items-center justify-center border border-border bg-card/24 px-4 py-6 sm:px-8">
-              <Card className="w-full max-w-xl rounded-none border border-border/70 bg-card/62 py-0 shadow-[0_32px_90px_rgb(0_0_0_/_0.12)] backdrop-blur-xl [&_[data-slot=button]]:rounded-none [&_input]:rounded-none">
-                <CardHeader className="gap-3 border-b border-border/70 px-5 py-6 sm:px-7">
-                  <CardTitle className="text-3xl tracking-[-0.05em]">Sign in</CardTitle>
-                  <CardDescription className="text-sm leading-7">
-                    Continue to your desktop workspace.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-5 px-5 py-6 sm:px-7">
-                  {error ? <div className="text-sm text-[var(--destructive)]">{error}</div> : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-12 w-full justify-center border-border/80 bg-background/58 hover:bg-muted/70"
-                    onClick={() => desktopBridge.openExternal(`${apiBaseUrl}/auth/sign-in/social?provider=google&callbackURL=automa://auth/callback`)}
-                    disabled={busy}
+        <Card className="rounded-none">
+          <CardHeader>
+            <CardTitle>{current.title}</CardTitle>
+            <CardDescription>{current.hint}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {step === 0 ? (
+              <div className="onboarding-grid">
+                <OnboardingField label="First name" required>
+                  <Input value={profile.basics.firstName} onChange={(e) => setBasics({ firstName: e.target.value })} />
+                </OnboardingField>
+                <OnboardingField label="Last name" required>
+                  <Input value={profile.basics.lastName} onChange={(e) => setBasics({ lastName: e.target.value })} />
+                </OnboardingField>
+                <OnboardingField label="Email" required>
+                  <Input type="email" value={profile.basics.email} onChange={(e) => setBasics({ email: e.target.value })} />
+                </OnboardingField>
+                <OnboardingField label="Phone">
+                  <Input value={profile.basics.phone ?? ""} onChange={(e) => setBasics({ phone: e.target.value })} />
+                </OnboardingField>
+                <OnboardingField label="Location" hint="City and state, as you would write it on an application.">
+                  <Input value={profile.basics.location ?? ""} onChange={(e) => setBasics({ location: e.target.value })} />
+                </OnboardingField>
+              </div>
+            ) : null}
+
+            {step === 1 ? (
+              <div className="onboarding-grid">
+                <OnboardingField label="Work authorization">
+                  <select
+                    className="onboarding-select"
+                    value={profile.workAuthorization.authorizedToWork ? "yes" : "no"}
+                    onChange={(e) =>
+                      setProfile((prev) => ({
+                        ...prev,
+                        workAuthorization: { ...prev.workAuthorization, authorizedToWork: e.target.value === "yes" }
+                      }))
+                    }
                   >
-                    <GoogleGlyph />
-                    Continue with Google
-                  </Button>
-                  <form className="space-y-4" onSubmit={submit}>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Email</label>
-                      <Input
-                        type="email"
-                        autoComplete="email"
-                        required
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        className="h-12 border-border/80 bg-background/62"
-                      />
+                    <option value="yes">Authorized to work in the US</option>
+                    <option value="no">Not authorized</option>
+                  </select>
+                </OnboardingField>
+                <OnboardingField label="Need sponsorship?">
+                  <select
+                    className="onboarding-select"
+                    value={profile.workAuthorization.requiresSponsorship ? "yes" : "no"}
+                    onChange={(e) =>
+                      setProfile((prev) => ({
+                        ...prev,
+                        workAuthorization: { ...prev.workAuthorization, requiresSponsorship: e.target.value === "yes" }
+                      }))
+                    }
+                  >
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </OnboardingField>
+                <OnboardingField label="School" required>
+                  <Input
+                    value={profile.education.school ?? ""}
+                    onChange={(e) =>
+                      setProfile((prev) => ({ ...prev, education: { ...prev.education, school: e.target.value, university: e.target.value } }))
+                    }
+                  />
+                </OnboardingField>
+                <OnboardingField label="Degree">
+                  <Input
+                    value={profile.education.degree ?? ""}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, education: { ...prev.education, degree: e.target.value } }))}
+                  />
+                </OnboardingField>
+                <OnboardingField label="Field of study">
+                  <Input
+                    value={profile.education.field ?? ""}
+                    onChange={(e) =>
+                      setProfile((prev) => ({ ...prev, education: { ...prev.education, field: e.target.value, discipline: e.target.value } }))
+                    }
+                  />
+                </OnboardingField>
+                <OnboardingField label="Graduation year">
+                  <Input
+                    value={profile.education.graduationYear ?? ""}
+                    onChange={(e) =>
+                      setProfile((prev) => ({ ...prev, education: { ...prev.education, graduationYear: e.target.value, endYear: e.target.value } }))
+                    }
+                  />
+                </OnboardingField>
+              </div>
+            ) : null}
+
+            {step === 2 ? (
+              <div className="space-y-4">
+                <div className="onboarding-resume">
+                  <div>
+                    <div className="onboarding-resume__name">{resume?.fileName ?? "No resume selected"}</div>
+                    <div className="onboarding-resume__hint">
+                      {resume ? "Attached. This file is uploaded to each application." : "PDF, DOCX or TXT."}
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Password</label>
-                      <div className="relative">
-                        <Input
-                          type={showPassword ? "text" : "password"}
-                          autoComplete="current-password"
-                          required
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          className="h-12 border-border/80 bg-background/62 pr-11"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword((current) => !current)}
-                          className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground"
-                          aria-label={showPassword ? "Hide password" : "Show password"}
-                        >
-                          {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <Button type="submit" className="h-12 w-full" disabled={busy}>
-                      {busy ? "Signing in..." : "Sign in"}
-                    </Button>
-                  </form>
-                </CardContent>
-                <CardFooter className="flex-col items-start gap-3 border-t border-border/70 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-                  <span className="text-sm text-muted-foreground">New to Automa?</span>
-                  <Button type="button" variant="ghost" onClick={() => navigate("/sign-up")}>
-                    Create account
+                  </div>
+                  <Button variant="outline" className="rounded-none" onClick={pickResume} disabled={busy === "resume"}>
+                    {busy === "resume" ? "Reading…" : resume ? "Choose another" : "Choose file"}
                   </Button>
-                </CardFooter>
-              </Card>
+                </div>
+                <OnboardingField label="Short summary" hint="Used when an application asks you to describe yourself.">
+                  <Textarea
+                    rows={4}
+                    value={profile.experience.summary ?? ""}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, experience: { ...prev.experience, summary: e.target.value } }))}
+                  />
+                </OnboardingField>
+              </div>
+            ) : null}
+
+            {error ? <div className="onboarding-error">{error}</div> : null}
+          </CardContent>
+          <CardFooter className="onboarding-footer">
+            <Button
+              variant="ghost"
+              className="rounded-none"
+              onClick={() => setStep((prev) => (prev > 0 ? ((prev - 1) as OnboardingStep) : prev))}
+              disabled={step === 0 || busy !== null}
+            >
+              Back
+            </Button>
+            {step < 2 ? (
+              <Button
+                className="rounded-none"
+                onClick={() => setStep((prev) => ((prev + 1) as OnboardingStep))}
+                disabled={!stepValid || busy !== null}
+              >
+                Continue
+              </Button>
+            ) : (
+              <Button className="rounded-none" onClick={finish} disabled={!stepValid || busy !== null}>
+                {busy === "save" ? "Saving…" : "Finish"}
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+
+        <div className="onboarding-guest">
+          <div>
+            <div className="onboarding-guest__title">Just want to look around?</div>
+            <div className="onboarding-guest__hint">
+              Loads a fictional candidate and a generated resume. Demo runs fill applications but never submit them.
             </div>
-          </section>
+          </div>
+          <Button variant="outline" className="rounded-none" onClick={startGuest} disabled={busy !== null}>
+            {busy === "guest" ? "Preparing…" : "Explore with a demo profile"}
+          </Button>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 
-function SignUpPage({ apiBaseUrl }: { apiBaseUrl: string }) {
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+function OnboardingField({
+  label,
+  hint,
+  required,
+  children
+}: {
+  label: string;
+  hint?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="onboarding-field">
+      <span className="onboarding-field__label">
+        {label}
+        {required ? <span className="onboarding-field__required" aria-hidden="true"> *</span> : null}
+      </span>
+      {children}
+      {hint ? <span className="onboarding-field__hint">{hint}</span> : null}
+    </label>
+  );
+}
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(`${apiBaseUrl}/auth/sign-up/email`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password })
-      });
-      if (!response.ok) {
-        setError("Unable to create account.");
-        return;
-      }
-      navigate("/onboarding");
-      window.location.reload();
-    } finally {
-      setBusy(false);
-    }
+/** Keeps anything the user already typed; the parse only fills blanks. */
+function mergeParsedProfile(current: UserProfileInput, parsed: UserProfileInput): UserProfileInput {
+  const pick = <T,>(mine: T, theirs: T): T => {
+    if (typeof mine === "string") return (mine.trim() ? mine : theirs) as T;
+    return (mine ?? theirs) as T;
+  };
+  return {
+    ...current,
+    basics: {
+      ...current.basics,
+      firstName: pick(current.basics.firstName, parsed.basics.firstName),
+      lastName: pick(current.basics.lastName, parsed.basics.lastName),
+      fullName: pick(current.basics.fullName, parsed.basics.fullName),
+      email: pick(current.basics.email, parsed.basics.email),
+      phone: pick(current.basics.phone ?? "", parsed.basics.phone ?? ""),
+      location: pick(current.basics.location ?? "", parsed.basics.location ?? "")
+    },
+    education: { ...parsed.education, ...stripEmpty(current.education as unknown as Record<string, unknown>) },
+    experience: { ...parsed.experience, ...stripEmpty(current.experience as unknown as Record<string, unknown>) },
+    links: { ...parsed.links, ...stripEmpty(current.links as unknown as Record<string, unknown>) }
+  };
+}
+
+function stripEmpty<T extends Record<string, unknown>>(value: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value ?? {})) {
+    if (entry === undefined || entry === null || entry === "") continue;
+    out[key] = entry;
   }
-
-  return (
-    <AuthLayoutShell
-      title="Create the desktop workspace."
-      subtitle="Account setup is minimal here. Resume capture, profile review, and runtime settings come immediately after authentication."
-      aside={
-        <AuthFeatureRail
-          headline="Sign-up should only establish the account. The real setup work happens in the product."
-          eyebrow="Create the account once, then move into onboarding and settings without bouncing through a marketing-style entry flow."
-          points={[
-            "Use Google if the identity already exists, or create a desktop account with email.",
-            "The desktop callback keeps provider auth attached to the machine running Automa.",
-            "Jobs, runs, and settings become available after onboarding is rebuilt."
-          ]}
-        />
-      }
-      ctaLabel="Sign in"
-      onCtaClick={() => navigate("/sign-in")}
-    >
-      <Card className="auth-form-card w-full max-w-xl rounded-none">
-        <CardHeader>
-          <Badge variant="secondary" className="w-fit rounded-none">New account</Badge>
-          <CardTitle>Create account</CardTitle>
-          <CardDescription>Use Google or create an email/password account for this desktop workspace.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="auth-form-section">
-            <Button
-              type="button"
-              variant="outline"
-              className="auth-google-button"
-              onClick={() => desktopBridge.openExternal(`${apiBaseUrl}/auth/sign-in/social?provider=google&callbackURL=automa://auth/callback`)}
-            >
-              <GoogleGlyph />
-              Continue with Google
-            </Button>
-            <div className="auth-divider"><span>or create with email</span></div>
-            <form className="auth-form-grid" onSubmit={submit}>
-              <AuthField label="Full name">
-                <Input
-                  placeholder="Full name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className="rounded-none"
-                  required
-                />
-              </AuthField>
-              <AuthField label="Email">
-                <Input
-                  type="email"
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="rounded-none"
-                  required
-                />
-              </AuthField>
-              <PasswordField label="Password" value={password} onChange={setPassword} />
-              {error ? <div className="text-sm text-[var(--destructive)]">{error}</div> : null}
-              <div className="auth-form-note">Account creation stays minimal here so the next step can move straight into desktop setup.</div>
-              <Button type="submit" className="rounded-none" disabled={busy}>{busy ? "Creating..." : "Create account"}</Button>
-            </form>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <span className="text-sm text-[var(--muted-foreground)]">Already have an account?</span>
-          <Link to="/sign-in" className="auth-footer-link">Sign in</Link>
-        </CardFooter>
-      </Card>
-    </AuthLayoutShell>
-  );
-}
-
-function OnboardingPage() {
-  const navigate = useNavigate();
-
-  return (
-    <AuthLayoutShell
-      title="Onboarding is paused."
-      subtitle="The old onboarding UI has been removed. A replacement flow will be rebuilt instead of keeping a broken version in the product."
-      aside={
-        <AuthFeatureRail
-          headline="The auth surface is live. The rest of first-run setup is waiting for a clean rebuild."
-          eyebrow="This placeholder is deliberate. The old wizard was removed instead of carrying forward a bad flow."
-          points={[
-            "Resume parsing will come back as part of the replacement onboarding flow.",
-            "Structured profile questions and save behavior are being rebuilt from scratch.",
-            "Existing users can still access jobs, runs, and settings once onboarding is complete."
-          ]}
-        />
-      }
-    >
-      <Card className="w-full max-w-2xl rounded-none">
-        <CardHeader>
-          <Badge variant="secondary" className="w-fit rounded-none">Removed</Badge>
-          <CardTitle>Current onboarding UI deleted</CardTitle>
-          <CardDescription>This route stays intentionally narrow until the replacement flow is ready.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-3">
-            <div className="auth-status-card">
-              The next onboarding version will be rebuilt cleanly. Nothing from the removed wizard is being kept as product UI.
-            </div>
-            <div className="auth-status-card">
-              Existing users can still use Jobs, Runs, and Settings. New-user onboarding is intentionally paused until the replacement is ready.
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button type="button" className="rounded-none" onClick={() => navigate("/sign-in")}>
-              Return to sign in
-            </Button>
-            <Button type="button" variant="outline" className="rounded-none" onClick={() => window.location.reload()}>
-              Refresh app
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </AuthLayoutShell>
-  );
+  return out as Partial<T>;
 }
 
 const RUN_FEEDBACK_STORAGE_KEY = "automa.runs.feedback";
@@ -1408,28 +1479,33 @@ function JobsPage({
   useEffect(() => {
     setJobsLoading(true);
     setJobsError(null);
-    fetch(`${apiBaseUrl}/jobs`, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error("Unable to load jobs.");
+    let cancelled = false;
+    void (async () => {
+      try {
+        // The corpus lives in local SQLite. If it is empty this is a first run,
+        // so pull the feed before showing an empty state.
+        let page = await bridge.listJobs({ limit: 100, automatableOnly: false });
+        if (!page.jobs.length) {
+          await bridge.syncJobs(false);
+          page = await bridge.listJobs({ limit: 100, automatableOnly: false });
         }
-        return response.json();
-      })
-      .then((payload) => {
-        const nextJobs = (payload.jobs || []) as JobFeedItem[];
+        if (cancelled) return;
+        const nextJobs = page.jobs.map(toJobFeedItem);
         setJobs(nextJobs);
-        setJobFeedback(
-          Object.fromEntries(nextJobs.map((job) => [job.id, job.feedback ?? null]))
-        );
+        setJobFeedback(Object.fromEntries(nextJobs.map((job) => [job.id, job.feedback ?? null])));
         setJobsLoading(false);
-      })
-      .catch((error) => {
+      } catch (error) {
+        if (cancelled) return;
         setJobs([]);
         setJobFeedback({});
         setJobsLoading(false);
         setJobsError(error instanceof Error ? error.message : "Unable to load jobs.");
-      });
-  }, [apiBaseUrl, refreshToken]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken]);
   const activeRunCount = runs.filter((run) => run.status === "running" || run.status === "queued").length;
   const submittedRunCount = appliedJobs.length;
   const desiredRoles = onboarding?.preferences.desiredRoles ?? [];
@@ -1465,18 +1541,8 @@ function JobsPage({
     }));
 
     try {
-      const response = await fetch(`${apiBaseUrl}/jobs/${jobId}/feedback`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({ verdict })
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to save job feedback.");
-      }
+      // "down" hides the job from the feed; "up" keeps it and marks it liked.
+      await bridge.setJobFeedback(jobId, verdict === "down" ? "hidden" : verdict === "up" ? "liked" : null);
     } catch (error) {
       setJobFeedback((current) => ({
         ...current,
@@ -1670,7 +1736,7 @@ function JobsPage({
           <div className="min-w-0">
             <CardTitle>Assigned for you</CardTitle>
             <CardDescription>
-              Server-curated from your saved preferences and the imported jobs catalog. Click a row to inspect it.
+              Pulled from the public SimplifyJobs boards and stored on this Mac. Click a row to inspect it.
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -2478,17 +2544,7 @@ function AppliedPage({
     setBoardJobs((current) => moveAppliedJobToStage(current, job.id, stage));
     setMovingJobId(job.id);
     try {
-      const response = await fetch(`${apiBaseUrl}/applied/${job.id}/tracker`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ stage })
-      });
-      if (!response.ok) {
-        throw new Error("Unable to update application stage.");
-      }
+      await bridge.moveApplied(job.id, stage as TrackerStageName);
       await refreshAppliedJobs();
       onNotify({
         tone: "success",
@@ -2738,21 +2794,10 @@ function ApplicationDetailPage({
     if (!application) return;
     setSaveBusy(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/applied/${application.appliedJob.id}/detail`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          insightsSummary,
-          contactTargets,
-          messageDrafts
-        })
-      });
-      if (!response.ok) {
-        throw new Error("Unable to save application notes.");
-      }
+      await bridge.setAppliedNotes(
+        application.appliedJob.id,
+        JSON.stringify({ insightsSummary, contactTargets, messageDrafts })
+      );
       await refresh();
       onNotify({
         tone: "success",
@@ -3598,7 +3643,7 @@ function SettingsPage({
           variant="outline"
           size="sm"
           className="rounded-none"
-          onClick={() => fetch(`${desktopState.config.apiBaseUrl}/auth/sign-out`, { method: "POST", credentials: "include" }).then(() => window.location.reload())}
+          onClick={() => window.location.reload()}
         >
           <LogOut className="size-4" />
           Sign out
@@ -3644,16 +3689,17 @@ function ProtectedRoutes({
   if (session.loading || hydratingProfile) {
     return <div className="flex min-h-screen items-center justify-center">Loading…</div>;
   }
-  if (!session.user) {
-    return <Navigate to="/sign-in" replace />;
-  }
-  if ((!session.user.onboardingCompleted || !desktopState.onboarding || !desktopState.resume) && location.pathname !== "/onboarding") {
+  // No accounts: the only gate is whether first-run setup is done.
+  if ((!desktopState.onboarding || !desktopState.resume) && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
   }
 
   return (
     <Routes>
-      <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route
+        path="/onboarding"
+        element={<OnboardingPage desktopState={desktopState} setDesktopState={setDesktopState} onNotify={onNotify} />}
+      />
       <Route
         path="/jobs"
         element={
@@ -3708,7 +3754,7 @@ function ProtectedRoutes({
 
 export function App() {
   const [desktopState, setDesktopState] = useDesktopState();
-  const session = useSession(desktopState.config.apiBaseUrl);
+  const session = useSession(desktopState);
   const [hydratingProfile, setHydratingProfile] = useState(false);
   const [jobsRefreshToken, setJobsRefreshToken] = useState(0);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -3733,19 +3779,10 @@ export function App() {
       return;
     }
 
-    setHydratingProfile(true);
-    fetch(`${desktopState.config.apiBaseUrl}/me/profile`, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json() as Promise<UserProfileInput>;
-      })
-      .then(async (profile) => {
-        if (!profile) return;
-        await desktopBridge.saveOnboarding(profile);
-        setDesktopState((current) => ({ ...current, onboarding: normalizeProfile(profile) }));
-      })
-      .finally(() => setHydratingProfile(false));
-  }, [desktopState.config.apiBaseUrl, desktopState.onboarding, hydratingProfile, session.loading, session.user, setDesktopState]);
+    // Nothing to hydrate: the profile is written to disk by the main process
+    // and arrives with desktop:get-state.
+    setHydratingProfile(false);
+  }, [desktopState.onboarding, session.loading, session.user]);
 
   useEffect(() => {
     return desktopBridge.onRunCompleted((payload: RunCompletionEvent) => {
@@ -3761,8 +3798,6 @@ export function App() {
   return (
     <div className="desktop-app-shell">
       <Routes>
-        <Route path="/sign-in" element={<SignInPage apiBaseUrl={desktopState.config.apiBaseUrl} />} />
-        <Route path="/sign-up" element={<SignUpPage apiBaseUrl={desktopState.config.apiBaseUrl} />} />
         <Route
           path="/*"
           element={

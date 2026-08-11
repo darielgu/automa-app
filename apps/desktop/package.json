@@ -6,7 +6,7 @@
   "main": "./dist-electron/electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"tsc -p tsconfig.electron.json --watch --preserveWatchOutput\" \"vite\" \"wait-on tcp:5173 file:dist-electron/electron/main.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
-    "build": "vite build && tsc -p tsconfig.electron.json",
+    "build": "vite build && tsc -p tsconfig.electron.json && node build/copy-preload.mjs",
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "test": "tsc -p tsconfig.electron.json && node --test dist-electron/electron/db/*.test.js"
   },

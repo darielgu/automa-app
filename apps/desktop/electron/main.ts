@@ -1,6 +1,7 @@
-import "dotenv/config";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, Notification, WebContentsView, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions, Rectangle, Session } from "electron";
 import {
@@ -20,6 +21,16 @@ import type {
 } from "@automa/shared-types";
 import type { DesktopBrowserDrawerBounds, DesktopResumeRecord, ResumeParseDraft } from "../src/desktop-types.js";
 import { createResumeRecord, parseResumeRecord } from "./resume.js";
+import { openDatabase, type Db } from "./db/database.js";
+import { GUEST_DEMOGRAPHICS, GUEST_PERSONA, guestResumeText } from "./guest-persona.js";
+import { generateGuestResume } from "./guest-resume.js";
+import {
+  appendRunEvent, getProfile, listApplied, listRunEvents, listStageEvents,
+  moveAppliedStage, saveProfile, setAppliedNotes, upsertAppliedJob, getSetting,
+  setSetting, type TrackerStage
+} from "./db/app-repo.js";
+import { getJob, jobFacets, queryJobs, setJobFeedback, type JobQuery } from "./db/jobs-repo.js";
+import { feedStatus, syncJobFeed } from "./job-feed/sync.js";
 
 type QueueEntry = RunOutcome & {
   sourceUrl: string;
@@ -82,9 +93,94 @@ type ActiveWorkerSession = {
 };
 
 const EMBEDDED_AUTOMATION_PARTITION = "persist:automa-automation";
-const EMBEDDED_AUTOMATION_DEBUG_PORT = Number(process.env.AUTOMA_EMBEDDED_DEBUG_PORT || 9223);
+/**
+ * The CDP port the automation engine attaches to.
+ *
+ * A fixed port is wrong for a distributed app: any other Chrome on 9223 and we
+ * would drive the wrong browser. Passing 0 makes Chromium choose a free port
+ * and write it to `DevToolsActivePort` in userData, which we then read back.
+ */
+let resolvedDebugPort: number | null = null;
+
+function readDevToolsPort(): number {
+  if (resolvedDebugPort) return resolvedDebugPort;
+  const forced = Number(process.env.AUTOMA_EMBEDDED_DEBUG_PORT || 0);
+  if (forced) {
+    resolvedDebugPort = forced;
+    return forced;
+  }
+  const portFile = path.join(app.getPath("userData"), "DevToolsActivePort");
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const first = readFileSync(portFile, "utf8").split("\n")[0]?.trim();
+      const parsed = Number(first);
+      if (parsed > 0) {
+        resolvedDebugPort = parsed;
+        return parsed;
+      }
+    } catch {
+      // Chromium has not written the file yet.
+    }
+    // Chromium writes this during startup; a short synchronous wait is simpler
+    // and more reliable here than racing an async watcher.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  }
+  throw new Error("Could not determine the embedded browser debugging port.");
+}
+
 const MAX_EMBEDDED_VIEW_DIMENSION = 8192;
+// Resolve bundled files relative to this compiled module rather than
+// app.getAppPath(). In a packaged app the `electron/` and `public/` source
+// directories are not shipped, so the old paths resolved to nothing and the
+// window came up with no preload and no icon.
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const appRoot = path.resolve(moduleDir, "..", "..");
+const rendererDir = path.join(appRoot, "dist");
+
+function resolveAsset(fileName: string): string {
+  for (const candidate of [path.join(rendererDir, fileName), path.join(appRoot, "public", fileName)]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return path.join(rendererDir, fileName);
+}
+
 const statePath = path.join(app.getPath("userData"), "automa-state.json");
+
+// One local database. Opened lazily so a migration failure surfaces as a real
+// error at first use rather than a silent crash during module evaluation.
+let dbHandle: Db | null = null;
+function db(): Db {
+  if (!dbHandle) dbHandle = openDatabase(path.join(app.getPath("userData"), "automa.db"));
+  return dbHandle;
+}
+
+/**
+ * Records a run step and pushes it to the renderer. This is what turns the run
+ * view from a status label into a live log of what the automation is doing.
+ */
+function emitRunEvent(runId: string, event: string, data?: unknown, level = "info"): void {
+  try {
+    appendRunEvent(db(), runId, { event, data, level });
+  } catch (error) {
+    console.error("Failed to record run event", error);
+  }
+  mainWindow?.webContents.send("run:events", { runId, event, data, level, ts: new Date().toISOString() });
+}
+
+/** Puts a finished run on the tracker board. */
+function recordAppliedJob(run: QueueEntry): void {
+  if (!run.jobId) return;
+  upsertAppliedJob(db(), {
+    jobId: run.jobId,
+    runId: run.id,
+    sourceUrl: run.sourceUrl,
+    title: run.jobTitle ?? "",
+    company: run.company ?? "",
+    location: run.location ?? "",
+    source: run.source ?? "",
+    stage: run.submissionConfirmed || run.submitted ? "applied" : "saved"
+  });
+}
 const HIDDEN_BROWSER_DRAWER_BOUNDS: Rectangle = { x: 0, y: 0, width: 0, height: 0 };
 
 let mainWindow: BrowserWindow | null = null;
@@ -100,7 +196,28 @@ let schedulerRunning = false;
 let schedulerWakeRequested = false;
 let schedulerSuspendedReason: string | null = null;
 
-app.commandLine.appendSwitch("remote-debugging-port", String(EMBEDDED_AUTOMATION_DEBUG_PORT));
+// Set before anything reads app.getPath("userData"): otherwise the directory
+// is derived from the package name (@automa/desktop) instead of the product.
+app.setName("Automa");
+// setPath throws if the target does not exist yet, so create it first. Without
+// this the app dies silently before whenReady and never opens a window.
+const userDataDir = path.join(app.getPath("appData"), "Automa");
+mkdirSync(userDataDir, { recursive: true });
+app.setPath("userData", userDataDir);
+
+// Only one instance may own the CDP port and the database.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
+app.commandLine.appendSwitch("remote-debugging-port", String(Number(process.env.AUTOMA_EMBEDDED_DEBUG_PORT || 0)));
 
 function sleepMs(durationMs: number): Promise<void> {
   if (!durationMs || durationMs <= 0) return Promise.resolve();
@@ -178,7 +295,7 @@ function buildDefaultDesktopConfig(): DesktopAutomationConfig {
     timeoutMs: 60000,
     outputDir,
     screenshotsDir: path.join(outputDir, "screenshots"),
-    automationDebugPort: EMBEDDED_AUTOMATION_DEBUG_PORT,
+    automationDebugPort: 0,
     automationPartition: EMBEDDED_AUTOMATION_PARTITION,
     aiProvider: "automa_api",
     openaiModel: "gpt-4o-mini",
@@ -685,7 +802,7 @@ function buildWorkerAutomationConfig(input: {
       }
     },
     browser: {
-      cdpUrl: `http://127.0.0.1:${config.automationDebugPort}`,
+      cdpUrl: `http://127.0.0.1:${config.automationDebugPort || readDevToolsPort()}`,
       cdpPageTitle: runTitle,
       cdpPageUrlPattern: runMarker,
       reuseAnchorPage: true,
@@ -807,102 +924,12 @@ async function desktopApiRequest<T>(input: {
   return await response.json() as T;
 }
 
-async function probeDesktopAuth(apiBaseUrl: string): Promise<boolean> {
-  const session = mainWindow?.webContents.session;
-  if (!session || !mainWindow || mainWindow.isDestroyed()) return false;
-  try {
-    const cookieHeader = await buildApiCookieHeaderForSession(session, apiBaseUrl);
-    await desktopApiRequest({
-      apiBaseUrl,
-      path: "me",
-      method: "GET",
-      cookieHeader
-    });
-    if (cookieHeader.trim()) {
-      lastKnownApiCookieHeaders.set(apiBaseUrl, cookieHeader);
-    }
-    return true;
-  } catch (error) {
-    if (error instanceof DesktopApiError && error.status === 401) {
-      return false;
-    }
-    console.error("Failed auth probe (/me)", error);
-    return false;
-  }
-}
-
-async function probeDesktopAuthWithCookieHeader(apiBaseUrl: string, cookieHeader: string): Promise<boolean> {
-  if (!cookieHeader.trim()) return false;
-  try {
-    await desktopApiRequest({
-      apiBaseUrl,
-      path: "me",
-      method: "GET",
-      cookieHeader
-    });
-    return true;
-  } catch (error) {
-    if (error instanceof DesktopApiError && error.status === 401) {
-      return false;
-    }
-    console.error("Failed auth probe (/me) with supplied cookie header", error);
-    return false;
-  }
-}
-
-async function fetchOnboardingProfileFromApi(apiBaseUrl: string, cookieHeader?: string): Promise<UserProfileInput | null> {
-  try {
-    const profile = await desktopApiRequest<UserProfileInput | null>({
-      apiBaseUrl,
-      path: "me/profile",
-      method: "GET",
-      cookieHeader
-    });
-    return profile ?? null;
-  } catch (error) {
-    if (error instanceof DesktopApiError && error.status === 404) {
-      return null;
-    }
-    console.error("Failed profile fetch (/me/profile)", error);
-    return null;
-  }
-}
-
-async function resolveRunOnboardingProfile(apiBaseUrl: string, runId: string): Promise<UserProfileInput | undefined> {
-  const local = readState().onboarding;
-  if (local) return local;
-
-  const cookieHeader = await buildApiCookieHeader(apiBaseUrl).catch(() => "");
-  const fetched = await fetchOnboardingProfileFromApi(apiBaseUrl, cookieHeader);
-  if (!fetched) return undefined;
-
-  const state = readState();
-  state.onboarding = fetched;
-  writeState(state);
-  emitRunsUpdated();
-  logTelemetry("run_profile_hydrated_from_api", { runId });
-  return fetched;
-}
-
-async function getBestApiCookieHeaderForRun(runId: string, apiBaseUrl: string): Promise<string> {
-  if (process.env.AUTOMA_FORCE_FINALIZE_401 === "1") {
-    return "automa_force_finalize_401=1";
-  }
-  const cached = runApiCookieHeaders.get(runId);
-  if (cached && await probeDesktopAuthWithCookieHeader(apiBaseUrl, cached)) {
-    return cached;
-  }
-  const fresh = await buildApiCookieHeader(apiBaseUrl).catch(() => "");
-  if (fresh) {
-    runApiCookieHeaders.set(runId, fresh);
-    lastKnownApiCookieHeaders.set(apiBaseUrl, fresh);
-    return fresh;
-  }
-  const lastKnown = lastKnownApiCookieHeaders.get(apiBaseUrl) || "";
-  if (lastKnown) {
-    runApiCookieHeaders.set(runId, lastKnown);
-  }
-  return lastKnown;
+// There are no accounts, so there is nothing to authenticate. A run is allowed
+// to start when the local profile and resume exist; executeRun performs that
+// check and reports missing_profile / missing_resume, which the UI already
+// renders.
+async function resolveRunOnboardingProfile(): Promise<UserProfileInput | undefined> {
+  return readState().onboarding;
 }
 
 function emitRunCompleted(run: QueueEntry) {
@@ -940,107 +967,34 @@ function emitRunCompleted(run: QueueEntry) {
   }
 }
 
-async function syncRunFinalization(run: QueueEntry, apiBaseUrl: string) {
-  const cookieHeader = await getBestApiCookieHeaderForRun(run.id, apiBaseUrl);
-  await desktopApiRequest({
-    apiBaseUrl,
-    path: `runs/${run.id}/finalize`,
-    method: "PATCH",
-    cookieHeader,
-    body: {
-      status: run.status,
-      phase: run.phase,
-      submitted: run.submitted,
-      submissionConfirmed: run.submissionConfirmed,
-      submitOutcome: run.submitOutcome,
-      startedAt: run.startedAt,
-      finishedAt: run.finishedAt,
-      failureDetail: run.failureDetail
-    }
-  });
-}
-
-async function createQueuedRun(input: {
-  apiBaseUrl: string;
+function createQueuedRun(input: {
   jobId: string;
   sourceUrl: string;
   jobTitle?: string;
   company?: string;
   location?: string;
   source?: string;
-  cookieHeader?: string;
-}): Promise<QueueEntry> {
-  const created = await desktopApiRequest<{ id: string }>({
-    apiBaseUrl: input.apiBaseUrl,
-    path: "runs",
-    method: "POST",
-    cookieHeader: input.cookieHeader,
-    body: { jobId: input.jobId }
-  });
-
-  return {
-    id: created.id,
-    jobId: input.jobId,
-    sourceUrl: input.sourceUrl,
-    jobTitle: input.jobTitle,
-    company: input.company,
-    location: input.location,
-    source: input.source,
-    status: "queued",
-    phase: "preparing",
-    submitted: false,
-    submissionConfirmed: false,
-    createdAt: new Date().toISOString()
-  };
+}): { id: string } {
+  // Run ids used to come from the server. They are local now.
+  return { id: randomUUID() };
 }
 
 function getMaxParallelRuns(config: DesktopAutomationConfig): number {
   return Math.min(WORKER_SLOT_IDS.length, Math.max(1, Math.floor(config.maxParallelRuns || 1)));
 }
 
-async function finalizeRun(run: QueueEntry, apiBaseUrl: string) {
-  const latestState = persistRun(run);
+async function finalizeRun(run: QueueEntry) {
+  persistRun(run);
+  // A finished run has to land on the tracker. This used to be the cloud API's
+  // job and it is the single behaviour most worth preserving from it.
   try {
-    await syncRunFinalization(run, apiBaseUrl || latestState.config.apiBaseUrl);
-    emitRunCompleted(run);
-  } catch (error) {
-    if (error instanceof DesktopApiError && error.status === 401) {
-      schedulerSuspendedReason = "finalize_401";
-      console.error("Scheduler suspended due to finalize 401", {
-        runId: run.id,
-        status: run.status,
-        phase: run.phase
-      });
-      if (run.submitted || run.submissionConfirmed) {
-        console.error("Finalize sync unauthorized; run already submitted", error);
-        emitRunCompleted(run);
-        return;
-      }
-
-      const desiredStatus = run.status;
-      const desiredPhase = run.phase;
-      const pausedForAuth: QueueEntry = {
-        ...run,
-        status: "paused_app_unavailable",
-        phase: "finalizing",
-        notes: [
-          ...(run.notes ?? []),
-          "infra_auth:finalize_401",
-          `finalize_retry_status=${desiredStatus}`,
-          `finalize_retry_phase=${desiredPhase}`
-        ],
-        failureDetail: run.failureDetail ?? {
-          reason: "infra_auth",
-          notes: ["Finalize sync returned 401; waiting for auth to retry."]
-        }
-      };
-      persistRun(pausedForAuth);
-      wakeScheduler("finalize:auth-401");
-      return;
+    if (run.submitted || run.submissionConfirmed || run.status === "completed") {
+      recordAppliedJob(run);
     }
-    console.error("Failed to sync run finalization", error);
-    emitRunCompleted(run);
+  } catch (error) {
+    console.error("Failed to record applied job", error);
   }
+  emitRunCompleted(run);
 }
 
 function markRunCancellationRequested(runId: string) {
@@ -1141,11 +1095,8 @@ async function executeRun(permit: SchedulerPermit) {
 
   const state = readState();
   const config = state.config;
-  const apiBaseUrl = config.apiBaseUrl;
   let onboardingProfile = state.onboarding;
   let run = { ...reserved };
-  const runCookieHeader = await getBestApiCookieHeaderForRun(runId, apiBaseUrl).catch(() => "");
-  runApiCookieHeaders.set(runId, runCookieHeader);
   const provider = detectPlatform(run.sourceUrl);
   const runOutputDirs = getRunOutputDirs(config, run.id);
   const slot = getWorkerSlot(permit.slotId);
@@ -1158,24 +1109,11 @@ async function executeRun(permit: SchedulerPermit) {
       run.phase = "finalizing";
       run.finishedAt = new Date().toISOString();
       run.notes = [...(run.notes ?? []), "run_cancelled_by_user"];
-      await finalizeRun(run, apiBaseUrl);
+      await finalizeRun(run);
       return;
     }
 
-    if (!(await probeDesktopAuth(apiBaseUrl))) {
-      const paused: QueueEntry = {
-        ...run,
-        status: "paused_app_unavailable",
-        phase: "preparing",
-        workerId: undefined,
-        browserVisible: false,
-        notes: [...(run.notes ?? []), "auth_probe_failed:lease_start"]
-      };
-      persistRun(paused);
-      return;
-    }
-
-    onboardingProfile = onboardingProfile ?? await resolveRunOnboardingProfile(apiBaseUrl, runId);
+    onboardingProfile = onboardingProfile ?? await resolveRunOnboardingProfile();
     if (!onboardingProfile) {
       await sleepMs(Number(process.env.AUTOMA_DEBUG_LEASE_DELAY_MS || 0));
       run.status = "failed";
@@ -1183,9 +1121,9 @@ async function executeRun(permit: SchedulerPermit) {
       run.finishedAt = new Date().toISOString();
       run.failureDetail = {
         reason: "missing_profile",
-        notes: ["Onboarding profile missing in local state and API profile store."]
+        notes: ["Finish onboarding before starting automation."]
       };
-      await finalizeRun(run, apiBaseUrl);
+      await finalizeRun(run);
       return;
     }
 
@@ -1198,7 +1136,7 @@ async function executeRun(permit: SchedulerPermit) {
         reason: "missing_resume",
         notes: ["Select a local resume before starting automation."]
       };
-      await finalizeRun(run, apiBaseUrl);
+      await finalizeRun(run);
       return;
     }
 
@@ -1229,8 +1167,7 @@ async function executeRun(permit: SchedulerPermit) {
         outputDir: runOutputDirs.outputDir,
         screenshotsDir: runOutputDirs.screenshotsDir,
         slot,
-        runId,
-        apiCookieHeader: runCookieHeader
+        runId
       }),
       profile: buildAutomationProfile(onboardingProfile),
       resumeText: state.resume.extractedText || onboardingProfile.experience.summary || "",
@@ -1271,7 +1208,7 @@ async function executeRun(permit: SchedulerPermit) {
       run.failureDetail = undefined;
       run.notes = [...run.notes, "run_cancelled_by_user"];
     }
-    await finalizeRun(run, apiBaseUrl);
+    await finalizeRun(run);
   } catch (error) {
     if (!mainWindow || mainWindow.isDestroyed() || (error instanceof Error && error.message.includes("main window is not ready"))) {
       const stage = run.phase === "submitting" ? "submitting" : "running";
@@ -1302,7 +1239,7 @@ async function executeRun(permit: SchedulerPermit) {
       run.screenshotPaths = [];
       run.workdayRunSummary = undefined;
     }
-    await finalizeRun(run, apiBaseUrl);
+    await finalizeRun(run);
   } finally {
     const currentRun = readState().runs.find((entry) => entry.id === run.id);
     if (currentRun?.browserVisible) {
@@ -1328,124 +1265,36 @@ async function runSchedulerLoop(_reason: string) {
   try {
     do {
       schedulerWakeRequested = false;
+
+      // Resume anything that was paused because the window went away. The old
+      // build also paused runs whenever a server session expired; with no
+      // accounts that whole recovery path is gone.
       const preState = readState();
-      const authReady = await probeDesktopAuth(preState.config.apiBaseUrl);
-      if (!authReady) {
-        const transitioned = preState.runs.map((entry) => {
-          if (entry.status === "queued") {
-            return markRunPausedForWindow(entry, "queued");
-          }
-          return entry;
-        });
-        if (JSON.stringify(transitioned) !== JSON.stringify(preState.runs)) {
-          writeRuns(transitioned);
-        }
-      } else {
-        const resumed: QueueEntry[] = preState.runs.map((entry) => {
-          const entryStatus = entry.status as string;
-          if (entryStatus === "paused_app_unavailable") {
-            const retryStatus = entry.notes?.find((note) => note.startsWith("finalize_retry_status="));
-            if (entry.phase === "finalizing" && retryStatus) {
-              return entry;
-            }
-            return {
-              ...entry,
-              status: "queued" as RunOutcome["status"],
-              phase: "preparing" as RunOutcome["phase"],
-              workerId: undefined,
-              browserVisible: false,
-              notes: [...(entry.notes ?? []), "auto_resume:auth_ready"]
-            };
-          }
-          return entry;
-        });
-        if (JSON.stringify(resumed) !== JSON.stringify(preState.runs)) {
-          writeRuns(resumed);
-        }
+      const resumed = preState.runs.map((entry) => {
+        const status = entry.status as string;
+        if (status !== "paused_app_unavailable") return entry;
+        if (!mainWindow || mainWindow.isDestroyed()) return entry;
+        return {
+          ...entry,
+          status: "queued" as RunOutcome["status"],
+          phase: "preparing" as RunOutcome["phase"],
+          notes: (entry.notes ?? []).filter((note) => !note.startsWith("paused_"))
+        };
+      });
+      if (JSON.stringify(resumed) !== JSON.stringify(preState.runs)) {
+        writeRuns(resumed);
       }
 
       while (true) {
         const state = readState();
-        const hasAuth = await probeDesktopAuth(state.config.apiBaseUrl);
-        if (!hasAuth) break;
-
-        if (schedulerSuspendedReason) {
-          const finalizeCandidate = state.runs.find((entry) => {
-            return (
-              entry.status === "paused_app_unavailable"
-              && entry.phase === "finalizing"
-              && Boolean(entry.notes?.some((note) => note.startsWith("finalize_retry_status=")))
-            );
-          });
-          if (finalizeCandidate) {
-            const statusNote = finalizeCandidate.notes?.find((note) => note.startsWith("finalize_retry_status=")) ?? "";
-            const desiredStatus = statusNote.split("=", 2)[1] ?? "completed";
-            const restored: QueueEntry = {
-              ...finalizeCandidate,
-              status: desiredStatus as RunOutcome["status"],
-              notes: (finalizeCandidate.notes ?? []).filter((note) => !note.startsWith("finalize_retry_"))
-            };
-            try {
-              await syncRunFinalization(restored, state.config.apiBaseUrl);
-              persistRun(restored);
-              emitRunCompleted(restored);
-              schedulerSuspendedReason = null;
-            } catch (error) {
-              console.error("Failed to retry finalize sync", error);
-            }
-          }
-
-          const transitioned = readState().runs.map((entry) => {
-            if (entry.status !== "queued") return entry;
-            return {
-              ...entry,
-              status: "paused_app_unavailable" as RunOutcome["status"],
-              notes: [...(entry.notes ?? []), `scheduler_suspended:${schedulerSuspendedReason}`]
-            };
-          });
-          if (JSON.stringify(transitioned) !== JSON.stringify(readState().runs)) {
-            writeRuns(transitioned);
-            console.error("Paused queued runs due to scheduler suspension", {
-              reason: schedulerSuspendedReason,
-              pausedCount: transitioned.filter((entry) => entry.status === "paused_app_unavailable" && entry.notes?.includes(`scheduler_suspended:${schedulerSuspendedReason}`)).length
-            });
-          }
-          break;
-        }
-
-        const finalizeCandidate = state.runs.find((entry) => {
-          return (
-            entry.status === "paused_app_unavailable"
-            && entry.phase === "finalizing"
-            && Boolean(entry.notes?.some((note) => note.startsWith("finalize_retry_status=")))
-          );
-        });
-        if (finalizeCandidate) {
-          const statusNote = finalizeCandidate.notes?.find((note) => note.startsWith("finalize_retry_status=")) ?? "";
-          const desiredStatus = statusNote.split("=", 2)[1] ?? "completed";
-          const restored: QueueEntry = {
-            ...finalizeCandidate,
-            status: desiredStatus as RunOutcome["status"],
-            notes: (finalizeCandidate.notes ?? []).filter((note) => !note.startsWith("finalize_retry_"))
-          };
-          try {
-            await syncRunFinalization(restored, state.config.apiBaseUrl);
-            persistRun(restored);
-            emitRunCompleted(restored);
-            schedulerSuspendedReason = null;
-          } catch (error) {
-            console.error("Failed to retry finalize sync", error);
-          }
-          continue;
-        }
-
-        if (workerSessions.size >= getMaxParallelRuns(state.config)) break;
-        const queued = state.runs.find((entry) => entry.status === "queued" && !workerSessions.has(entry.id));
+        const queued = state.runs.find((entry) => entry.status === "queued");
         if (!queued) break;
 
+        const running = state.runs.filter((entry) => entry.status === "running").length;
+        if (running >= getMaxParallelRuns(state.config)) break;
+
         if (!mainWindow || mainWindow.isDestroyed()) {
-          const paused = markRunPausedForWindow(queued, "queued");
-          persistRun(paused);
+          persistRun(markRunPausedForWindow(queued, "queued"));
           break;
         }
 
@@ -1464,11 +1313,11 @@ async function runSchedulerLoop(_reason: string) {
         };
         persistRun(reserved);
 
-      workerSessions.set(reserved.id, {
-        runId: reserved.id,
-        leaseId: permit.permitId,
-        workerId: reserved.workerId || permit.slotId,
-        slotId: permit.slotId,
+        workerSessions.set(reserved.id, {
+          runId: reserved.id,
+          leaseId: permit.permitId,
+          workerId: reserved.workerId || permit.slotId,
+          slotId: permit.slotId,
           provider: "unknown",
           browserVisible: false
         });
@@ -1566,8 +1415,8 @@ async function closeRunBrowser(runId: string) {
 }
 
 function createWindow() {
-  const preloadPath = path.join(app.getAppPath(), "electron", "preload.cjs");
-  const iconPath = path.join(app.getAppPath(), "public", "Automa.png");
+  const preloadPath = path.join(moduleDir, "preload.cjs");
+  const iconPath = resolveAsset("Automa.png");
   mainWindow = new BrowserWindow({
     width: 1420,
     height: 940,
@@ -1587,7 +1436,7 @@ function createWindow() {
   if (devUrl) {
     void mainWindow.loadURL(devUrl);
   } else {
-    void mainWindow.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
+    void mainWindow.loadFile(path.join(rendererDir, "index.html"));
   }
   mainWindow.on("resize", () => {
     void syncEmbeddedBrowserDrawer();
@@ -1673,7 +1522,7 @@ function recoverRunsOnStartup() {
 }
 
 app.whenReady().then(() => {
-  const dockIconPath = path.join(app.getAppPath(), "public", "Automa.png");
+  const dockIconPath = resolveAsset("Automa.png");
   if (process.platform === "darwin" && app.dock && existsSync(dockIconPath)) {
     app.dock.setIcon(dockIconPath);
   }
@@ -1681,6 +1530,87 @@ app.whenReady().then(() => {
   recoverRunsOnStartup();
 
   ipcMain.handle("desktop:get-state", () => readState());
+
+  // ---- job feed ----------------------------------------------------------
+  ipcMain.handle("jobs:list", (_event, query: JobQuery = {}) => queryJobs(db(), query));
+  ipcMain.handle("jobs:get", (_event, jobId: string) => getJob(db(), String(jobId)));
+  ipcMain.handle("jobs:facets", () => jobFacets(db()));
+  ipcMain.handle("jobs:feedback", (_event, jobId: string, verdict: "liked" | "hidden" | "saved" | null) => {
+    setJobFeedback(db(), String(jobId), verdict);
+    return true;
+  });
+  ipcMain.handle("jobs:sync", async (_event, force?: boolean) => {
+    const result = await syncJobFeed(db(), { force: Boolean(force) });
+    mainWindow?.webContents.send("jobs:updated", result);
+    return result;
+  });
+  ipcMain.handle("jobs:status", () => feedStatus(db()));
+
+  // ---- tracker -----------------------------------------------------------
+  ipcMain.handle("tracker:list", () => listApplied(db()));
+  ipcMain.handle("tracker:timeline", (_event, appliedId: string) => listStageEvents(db(), String(appliedId)));
+  ipcMain.handle("tracker:move", (_event, appliedId: string, stage: TrackerStage, note?: string) =>
+    moveAppliedStage(db(), String(appliedId), stage, note ?? "")
+  );
+  ipcMain.handle("tracker:notes", (_event, appliedId: string, notes: string) => {
+    setAppliedNotes(db(), String(appliedId), String(notes));
+    return true;
+  });
+
+  // ---- profile and settings ---------------------------------------------
+  ipcMain.handle("profile:get", () => getProfile(db()));
+  ipcMain.handle("settings:get", (_event, key: string) => getSetting(db(), String(key)));
+  ipcMain.handle("settings:set", (_event, key: string, value: string) => {
+    setSetting(db(), String(key), String(value));
+    return true;
+  });
+
+  // ---- guest mode --------------------------------------------------------
+  ipcMain.handle("desktop:start-guest", async () => {
+    const state = readState();
+    const resume = await generateGuestResume();
+
+    state.onboarding = GUEST_PERSONA;
+    state.resume = {
+      fileName: resume.fileName,
+      filePath: resume.filePath,
+      mimeType: "application/pdf",
+      selectedAt: new Date().toISOString(),
+      extractedText: guestResumeText()
+    };
+
+    // Demo runs never submit. A fictional persona must not be able to file a
+    // real application at a real company.
+    state.config = { ...state.config, mode: "dry-run" };
+    writeState(state);
+
+    saveProfile(db(), {
+      fullName: GUEST_PERSONA.basics.fullName ?? "",
+      firstName: GUEST_PERSONA.basics.firstName,
+      lastName: GUEST_PERSONA.basics.lastName,
+      email: GUEST_PERSONA.basics.email,
+      phone: GUEST_PERSONA.basics.phone ?? "",
+      location: GUEST_PERSONA.basics.location ?? "",
+      links: { ...GUEST_PERSONA.links } as Record<string, unknown>,
+      workAuthorization: { ...GUEST_PERSONA.workAuthorization } as Record<string, unknown>,
+      education: { ...GUEST_PERSONA.education } as Record<string, unknown>,
+      experience: { ...GUEST_PERSONA.experience } as Record<string, unknown>,
+      preferences: { ...GUEST_PERSONA.preferences } as Record<string, unknown>,
+      demographics: { ...GUEST_DEMOGRAPHICS } as Record<string, unknown>,
+      customAnswers: { ...GUEST_PERSONA.customAnswers } as Record<string, unknown>,
+      previousEmployers: GUEST_PERSONA.previousEmployers ?? [],
+      isDemo: true
+    });
+    setSetting(db(), "guest_mode", "1");
+    setSetting(db(), "onboarding_completed", "1");
+
+    emitRunsUpdated();
+    return readState();
+  });
+  ipcMain.handle("desktop:is-guest", () => getSetting(db(), "guest_mode") === "1");
+  ipcMain.handle("runs:events", (_event, runId: string, afterId?: number) =>
+    listRunEvents(db(), String(runId), Number(afterId ?? 0))
+  );
   ipcMain.handle("desktop:save-onboarding", async (_event, profile: UserProfileInput) => {
     const state = readState();
     state.onboarding = profile;
@@ -1759,18 +1689,29 @@ app.whenReady().then(() => {
     source?: string;
   }) => {
     const state = readState();
-    const cookieHeader = await buildApiCookieHeaderForSession(_event.sender.session, state.config.apiBaseUrl);
-    const run = await createQueuedRun({
-      apiBaseUrl: state.config.apiBaseUrl,
+    const created = createQueuedRun({
       jobId: job.id,
       sourceUrl: job.sourceUrl,
       jobTitle: job.title,
       company: job.company,
       location: job.location,
-      source: job.source,
-      cookieHeader
+      source: job.source
     });
-    runApiCookieHeaders.set(run.id, cookieHeader);
+    const run: QueueEntry = {
+      id: created.id,
+      jobId: job.id,
+      status: "queued",
+      phase: "preparing",
+      submitted: false,
+      submissionConfirmed: false,
+      sourceUrl: job.sourceUrl,
+      jobTitle: job.title,
+      company: job.company,
+      location: job.location,
+      source: job.source,
+      createdAt: new Date().toISOString(),
+      notes: []
+    };
     state.runs.unshift(run);
     writeState(state);
     emitRunsUpdated();

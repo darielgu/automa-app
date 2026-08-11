@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Skeleton } from "./components/ui/skeleton.js";
+import { classifyFeedSync } from "../electron/job-feed/classify.js";
 import { duration, ease, smoothSpring, stepVariants, swapVariants, toastVariants } from "./lib/motion.js";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -19,6 +20,7 @@ import {
   MoveRight,
   Plus,
   PlayCircle,
+  RefreshCw,
   Search,
   Settings,
   Sparkles,
@@ -198,6 +200,23 @@ function formatPhase(phase: RunOutcome["phase"]) {
 
 function formatRunStatus(status: RunOutcome["status"]) {
   return status.replaceAll("_", " ");
+}
+
+/**
+ * "4 minutes ago" for a unix-seconds timestamp.
+ *
+ * Exact clock times are noise for something that refreshes hourly; what a
+ * person wants to know is whether the list in front of them is current.
+ */
+export function formatRelativeTime(seconds: number, now = Date.now()): string {
+  const elapsed = Math.max(0, Math.floor(now / 1000) - seconds);
+  if (elapsed < 60) return "just now";
+  const minutes = Math.floor(elapsed / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 function formatDateTime(value?: string) {
@@ -528,10 +547,33 @@ interface LocalAppliedRecord {
   updatedAt: string;
 }
 
-/** The shape `jobs:status` returns; only the parts the renderer reads. */
 interface FeedStatus {
   provider: "github" | "supabase";
   counts?: { total?: number; active?: number };
+  /**
+   * Per-feed freshness. This used to be omitted, with a comment saying the
+   * renderer only read `provider` -- so the app knew exactly when it last
+   * heard from GitHub and never told anyone.
+   */
+  feeds?: Array<{
+    repo: string;
+    lastSuccessAt: number | null;
+    lastHttpStatus: number | null;
+    entryCount: number | null;
+    error: string | null;
+  }>;
+}
+
+/** What `jobs:sync` resolves to. It resolves even when every feed failed. */
+interface FeedSyncOutcome {
+  provider: "github" | "supabase";
+  repos: Array<{
+    repo: string;
+    status: number | "skipped" | "error";
+    fetched: number;
+    error?: string;
+  }>;
+  upserted: number;
 }
 
 /** What `jobs:list` really returns. The cursor used to be dropped here. */
@@ -551,7 +593,7 @@ interface LocalBridge {
   listJobs(query: Record<string, unknown>): Promise<LocalJobPage>;
   jobFacets(): Promise<JobFacets>;
   setJobFeedback(jobId: string, verdict: "liked" | "hidden" | "saved" | null): Promise<boolean>;
-  syncJobs(force?: boolean): Promise<unknown>;
+  syncJobs(force?: boolean): Promise<FeedSyncOutcome | undefined>;
   jobsStatus(): Promise<FeedStatus>;
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string | null): Promise<boolean>;
@@ -1692,6 +1734,26 @@ function JobsPage({
   }, [runs]);
 
   const PAGE_SIZE = 100;
+  const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null);
+
+  const refreshFeedStatus = useCallback(async () => {
+    setFeedStatus(await bridge.jobsStatus().catch(() => null));
+  }, []);
+
+  useEffect(() => {
+    void refreshFeedStatus();
+  }, [refreshFeedStatus, feedVersion]);
+
+  /**
+   * When the newest feed last answered.
+   *
+   * Deliberately the newest rather than the oldest: one stalled feed out of
+   * three should not make a corpus that is minutes old look like a week.
+   */
+  const lastSyncedAt = useMemo(() => {
+    const stamps = (feedStatus?.feeds ?? []).map((feed) => feed.lastSuccessAt).filter((value): value is number => Boolean(value));
+    return stamps.length ? Math.max(...stamps) : null;
+  }, [feedStatus]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState("");
@@ -1791,6 +1853,8 @@ function JobsPage({
       setLoadingMore(false);
     }
   }
+
+  const feedProblem = (feedStatus?.feeds ?? []).find((feed) => feed.error)?.error ?? null;
 
   const filtersActive = Boolean(search || platformFilter || categoryFilter || includeHidden || (usePreferences && preferenceRoles.length));
 
@@ -1943,20 +2007,31 @@ function JobsPage({
   const [resyncing, setResyncing] = useState(false);
 
   /** The empty state's next action: force a fetch and redraw from what lands. */
+  /**
+   * Refreshes the corpus and says what actually happened.
+   *
+   * syncJobFeed never rejects on a network failure: it records the error
+   * against the feed and resolves normally. This function used to discard that
+   * result, so someone with no network was told "The feed returned nothing
+   * new" -- the same sentence the app used for "you are already up to date"
+   * and for "you asked again too soon". The real cause was sitting in the
+   * object being thrown away.
+   */
   async function resyncJobs() {
     setResyncing(true);
     setJobsError(null);
     try {
-      await bridge.syncJobs(true);
-      const page = await bridge.listJobs({ limit: 100, automatableOnly: false });
-      const nextJobs = page.jobs.map(toJobFeedItem);
-      setJobs(nextJobs);
-      setSupportById(Object.fromEntries(page.jobs.map((job) => [job.simplifyId, job.support])));
-      setJobFeedback(Object.fromEntries(nextJobs.map((job) => [job.id, job.feedback ?? null])));
-      onNotify({
-        tone: nextJobs.length ? "success" : "neutral",
-        message: nextJobs.length ? `${nextJobs.length} listings ready.` : "The feed returned nothing new."
-      });
+      const outcome = await bridge.syncJobs(true);
+      const page = await bridge.listJobs(buildQuery(null));
+      applyPage(page, false);
+      void refreshFeedStatus();
+
+      const verdict = classifyFeedSync(outcome?.repos ?? [], outcome?.upserted ?? 0);
+      if (verdict.tone === "error") {
+        setJobsError(verdict.message);
+      } else {
+        onNotify({ tone: verdict.tone, message: verdict.message });
+      }
     } catch (error) {
       setJobsError(error instanceof Error ? error.message : "The job feed could not be reached.");
     } finally {
@@ -2080,6 +2155,31 @@ function JobsPage({
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <span className="desktop-jobs-freshness">
+              {feedProblem
+                ? "Feed may be out of date"
+                : lastSyncedAt
+                  ? `Synced ${formatRelativeTime(lastSyncedAt)}`
+                  : "Not synced yet"}
+            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label="Refresh listings"
+                  disabled={resyncing}
+                  onClick={() => void resyncJobs()}
+                  className="size-8 cursor-pointer px-0"
+                >
+                  <RefreshCw className={cn("size-3.5", resyncing ? "animate-spin" : null)} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="end">
+                Check for new listings
+              </TooltipContent>
+            </Tooltip>
             {selectionMode ? (
               <>
                 <Button

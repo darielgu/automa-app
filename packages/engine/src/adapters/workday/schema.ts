@@ -350,6 +350,19 @@ function hasAny(locator: Locator): Promise<boolean> {
  * concluded the application was not ready. Fall back to the element's own
  * layout box, which is computed regardless of whether the view is being drawn.
  */
+/**
+ * Lenient visibility.
+ *
+ * Workday nests its step containers so that the container's own box often
+ * collapses to zero while its children are laid out and interactive. Strict
+ * Playwright visibility calls that hidden, so anything choosing a container has
+ * to use this. Anything later re-checking that choice has to use it too, or the
+ * two disagree about the same element and the run dies on a page that is fine.
+ */
+export async function hasVisibleWorkdayContainer(locator: Locator): Promise<boolean> {
+  return hasVisible(locator);
+}
+
 async function hasVisible(locator: Locator): Promise<boolean> {
   const count = await locator.count().catch(() => 0);
   for (let i = 0; i < count; i += 1) {
@@ -903,7 +916,21 @@ async function extractScopedOpenOptions(page: Page, triggerSelector: string): Pr
   }, triggerSelector).catch(() => [] as string[]);
 }
 
-async function hydrateWorkdayWidgetOptions(page: Page, widget: WorkdayWidgetSchema): Promise<WorkdayWidgetSchema> {
+/**
+ * How hard to work to discover a widget's options.
+ *
+ * "native" is a DOM read and costs nothing. "full" also opens each custom
+ * dropdown to see what is inside, which means a click, a wait and an Escape per
+ * widget -- affordable on the two steps that are mostly dropdowns, wasteful
+ * everywhere else.
+ */
+type WorkdayOptionHydration = "native" | "full";
+
+async function hydrateWorkdayWidgetOptions(
+  page: Page,
+  widget: WorkdayWidgetSchema,
+  depth: WorkdayOptionHydration = "full"
+): Promise<WorkdayWidgetSchema> {
   if (widget.options.length > 0) return widget;
   const selector = widget.selectorHints.controlSelector || widget.selectorHints.containerSelector;
   if (!selector) return widget;
@@ -914,6 +941,8 @@ async function hydrateWorkdayWidgetOptions(page: Page, widget: WorkdayWidgetSche
     if (options.length) return { ...widget, options };
     return widget;
   }
+
+  if (depth === "native") return widget;
 
   if (widget.widgetType !== "button_select" && widget.widgetType !== "prompt_input_select") {
     return widget;
@@ -1621,14 +1650,15 @@ export async function extractWorkdayStepWidgets(page: Page, step: WorkdayStep): 
   }, { currentStep: step, containerSelector: activeContainerSelector }).catch(() => [] as WorkdayControlSnapshot[]);
 
   const widgets = buildWorkdayWidgetsFromControls(controls, step);
-  if (step === "my_experience") {
-    const hydrated: WorkdayWidgetSchema[] = [];
-    for (const widget of widgets) {
-      hydrated.push(await hydrateWorkdayWidgetOptions(page, widget));
-    }
-    return hydrated;
+  const hydrated: WorkdayWidgetSchema[] = [];
+  for (const widget of widgets) {
+    // Every step gets native <select> options read, because they cost one DOM
+    // query. Skipping them left "How Did You Hear About Us?" -- a standard
+    // Contact Information dropdown -- with an empty option list on every run,
+    // so nothing could be chosen and the step failed.
+    hydrated.push(await hydrateWorkdayWidgetOptions(page, widget, step === "my_experience" ? "full" : "native"));
   }
-  return widgets;
+  return hydrated;
 }
 
 export async function extractWorkdayStepSchema(page: Page, step: WorkdayStep): Promise<WorkdayFieldSchema[]> {

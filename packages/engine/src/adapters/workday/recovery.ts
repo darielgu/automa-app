@@ -359,7 +359,10 @@ async function appendNoAdvanceDiagnostics(page: Page, notes: string[] | undefine
   const diagnosticsDir = path.resolve(process.cwd(), "output", "screenshots");
   fs.mkdirSync(diagnosticsDir, { recursive: true });
   const diagPath = path.join(diagnosticsDir, `workday-transition-diag-${Date.now()}.png`);
-  await page.screenshot({ path: diagPath, fullPage: true }).catch(() => undefined);
+  // The write fails silently when the diagnostics directory does not exist, and
+  // the note below then points at a file nobody can open. Record whether it
+  // actually landed rather than asserting it did.
+  const diagWritten = await page.screenshot({ path: diagPath, fullPage: true }).then(() => true, () => false);
 
   notes.push(`workday_transition_before:step=${before.step}:url=${before.url}:footer=${before.footerText}:alerts=${before.inputAlertCount}`);
   notes.push(`workday_transition_after:step=${after.step}:url=${after.url}:footer=${after.footerText}:alerts=${after.inputAlertCount}`);
@@ -370,7 +373,9 @@ async function appendNoAdvanceDiagnostics(page: Page, notes: string[] | undefine
   if (activeElement) notes.push(`workday_transition_active_element:${normalizeText(activeElement)}`);
   if (committedRequired.length) notes.push(`workday_transition_required_values:${committedRequired.slice(0, 12).join(" || ")}`);
   notes.push(`workday_transition_heading:${after.heading}`);
-  notes.push(`workday_transition_diag_screenshot:${diagPath}`);
+  notes.push(diagWritten
+    ? `workday_transition_diag_screenshot:${diagPath}`
+    : "workday_transition_diag_screenshot_unavailable");
 }
 
 interface FooterCandidate {

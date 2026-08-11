@@ -29,6 +29,12 @@ fs.writeFileSync(
 const profile = JSON.parse(
   fs.readFileSync(path.join(root, "packages/engine/examples/profile.example.json"), "utf8")
 );
+// The example profile carries files.resumePath: "./examples/resume.txt", a
+// relative path that does not resolve from the app's working directory. Left
+// in, it beats the real resume record and every upload fails verification --
+// so the harness would be exercising a configuration no user ever has.
+profile.files = { ...(profile.files ?? {}), resumePath };
+
 profile.preferences ??= {
   desiredRoles: ["Software Engineer"],
   desiredLocations: ["Remote"],

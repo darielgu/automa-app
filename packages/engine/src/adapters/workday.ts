@@ -1935,7 +1935,9 @@ export class WorkdayAdapter extends BaseAdapter {
         result.failureStep = error.step;
         result.failureLabel = error.label;
         result.failureLastAction = error.lastAction;
-        result.notes.push("workday_executor_page_closed");
+        result.notes.push(error.reason === "step_container_gone"
+          ? "workday_executor_step_container_gone"
+          : "workday_executor_page_closed");
         result.notes.push(`workday_failure_stage:${error.stage}`);
         result.notes.push(`workday_failure_step:${error.step}`);
         if (error.label) result.notes.push(`workday_executor_last_widget_label:${error.label}`);

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import type { CandidateProfile, QuestionType, QuestionnaireResolutionRecord, ResolvedAnswer } from "../../core/types.js";
 import type { WorkdayFieldSchema, WorkdayStep, WorkdayWidgetSchema } from "./schema.js";
 
@@ -437,6 +438,20 @@ function parsePreviousEmployers(profile: CandidateProfile): string[] {
   return [...new Set([...fromWorkday, ...fromProfile, ...fromCustom].map((value) => normalizeForMatch(value)))];
 }
 
+/**
+ * A resume path the profile names wins -- unless the file is not there.
+ *
+ * A saved profile keeps whatever path it was written with. When that file is
+ * moved or deleted, preferring it unconditionally means every upload silently
+ * fails verification, and the resume is the one field an application cannot do
+ * without. A path that does not resolve is worse than no preference at all.
+ */
+function pickUsableResumePath(preferred?: string, fallback?: string): string {
+  const candidate = (preferred || "").trim();
+  if (candidate && (!fallback?.trim() || fs.existsSync(candidate))) return candidate;
+  return (fallback || "").trim() || candidate;
+}
+
 export function normalizeWorkdayProfile(profile: CandidateProfile, resumePathFallback?: string): NormalizedWorkdayProfile {
   const wd = profile.workday;
   const fallbackFullName = normalizeText(profile.basics.fullName || `${profile.basics.firstName} ${profile.basics.lastName}`);
@@ -549,7 +564,7 @@ export function normalizeWorkdayProfile(profile: CandidateProfile, resumePathFal
       other: profile.links?.website ? [profile.links.website] : []
     },
     files: {
-      resumePath: wd?.files?.resumePath || resumePathFallback || ""
+      resumePath: pickUsableResumePath(wd?.files?.resumePath, resumePathFallback)
     },
     demographics: {
       ...wd?.demographics,

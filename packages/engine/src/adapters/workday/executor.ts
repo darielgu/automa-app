@@ -3,7 +3,10 @@ import type { AppLogger } from "../../core/logger.js";
 import type { FilledFieldRecord, ResolvedAnswer } from "../../core/types.js";
 import type { NormalizedWorkdayProfile, WorkdayWidgetAnswer } from "./resolver.js";
 import { resolveWorkdayVoluntaryDisclosureOption } from "./resolver.js";
-import { resolveActiveWorkdayContainerSelector, type WorkdayFieldSchema, type WorkdayWidgetSchema } from "./schema.js";
+import { resolveActiveWorkdayContainerSelector, type WorkdayFieldSchema, type WorkdayWidgetSchema,
+  detectWorkdayStep,
+  hasVisibleWorkdayContainer
+} from "./schema.js";
 import { extractOptionsFromOpenDropdown, normalizeText, safeClick, safeFill } from "./navigation.js";
 
 const WORKDAY_LANGUAGE_LABEL_PATTERNS: RegExp[] = [
@@ -39,6 +42,8 @@ const workdayExecutorRuntimeContext: WorkdayExecutorRuntimeContext = {};
 export class WorkdayExecutorRuntimeError extends Error {
   readonly submitOutcome = "browser_context_closed" as const;
   readonly stage = "executor" as const;
+  /** Why execution stopped. The two have completely different remedies. */
+  readonly reason: "page_closed" | "step_container_gone";
   readonly step: string;
   readonly label: string;
   readonly lastAction: string;
@@ -46,14 +51,16 @@ export class WorkdayExecutorRuntimeError extends Error {
   readonly url: string;
 
   constructor(input: {
+    reason?: "page_closed" | "step_container_gone";
     step?: string;
     label?: string;
     lastAction?: string;
     selector?: string;
     url?: string;
   }) {
-    super("workday_browser_context_closed");
+    super(input.reason === "step_container_gone" ? "workday_step_container_gone" : "workday_browser_context_closed");
     this.name = "WorkdayExecutorRuntimeError";
+    this.reason = input.reason ?? "page_closed";
     this.step = input.step || "unknown";
     this.label = input.label || "";
     this.lastAction = input.lastAction || "";
@@ -75,17 +82,28 @@ function isPageClosedLikeError(error: unknown): boolean {
   return /target page, context or browser has been closed|page\.waitfor|browser has been closed|context.*closed/i.test(message);
 }
 
-async function throwWorkdayExecutorRuntimeError(page: Page): Promise<never> {
+/**
+ * @param reason What actually went wrong. This used to be assumed: every abort
+ * reported "page closed", including the common case where the page was open and
+ * only the step container had gone invisible. The URL was recorded in the same
+ * breath, which contradicted the note it sat beside and sent anyone reading a
+ * failed run looking for a crashed browser that never crashed.
+ */
+async function throwWorkdayExecutorRuntimeError(
+  page: Page,
+  reason: "page_closed" | "step_container_gone" = "page_closed"
+): Promise<never> {
   const notes = workdayExecutorRuntimeContext.notes;
   const url = page.isClosed() ? "" : page.url();
   if (notes) {
-    notes.push("workday_executor_page_closed");
+    notes.push(reason === "page_closed" ? "workday_executor_page_closed" : "workday_executor_step_container_gone");
     if (workdayExecutorRuntimeContext.lastAction) notes.push(`workday_executor_last_action:${workdayExecutorRuntimeContext.lastAction}`);
     if (workdayExecutorRuntimeContext.label) notes.push(`workday_executor_last_widget_label:${workdayExecutorRuntimeContext.label}`);
     if (workdayExecutorRuntimeContext.selector) notes.push(`workday_executor_last_selector:${workdayExecutorRuntimeContext.selector}`);
     if (url) notes.push(`workday_runtime_url_before_failure:${url}`);
   }
   throw new WorkdayExecutorRuntimeError({
+    reason,
     step: workdayExecutorRuntimeContext.step,
     label: workdayExecutorRuntimeContext.label,
     lastAction: workdayExecutorRuntimeContext.lastAction,
@@ -103,10 +121,33 @@ async function ensureWorkdayExecutorReady(page: Page, action: string, selector?:
   if (!step) return;
   const activeSelector = await resolveActiveWorkdayContainerSelector(page, step as never).catch(() => "");
   if (!activeSelector) return;
-  const visible = await page.locator(activeSelector).first().isVisible().catch(() => false);
-  if (!visible) {
-    await throwWorkdayExecutorRuntimeError(page);
+
+  // Workday re-renders its step container on almost every interaction, so a
+  // single instantaneous check catches it mid-swap and calls a healthy page
+  // dead. Give it a moment to come back before concluding anything.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await hasVisibleWorkdayContainer(page.locator(activeSelector)).catch(() => false)) return;
+    if (page.isClosed()) await throwWorkdayExecutorRuntimeError(page, "page_closed");
+    await page.waitForTimeout(250);
   }
+
+  // The container is gone for good. Before calling that a failure, ask why:
+  // the usual reason is that the form was accepted and Workday moved to the
+  // next step, which is the flow working, not breaking. Treating it as a fatal
+  // error made every successful advance look like a crashed browser -- and the
+  // remaining widgets of a step that no longer exists are moot either way.
+  const currentStep = await detectWorkdayStep(page).catch(() => null);
+  workdayExecutorRuntimeContext.notes?.push(
+    `workday_step_recheck:${workdayExecutorRuntimeContext.step || "none"}->${currentStep || "none"}`
+  );
+  if (currentStep && currentStep !== workdayExecutorRuntimeContext.step) {
+    workdayExecutorRuntimeContext.notes?.push(
+      `workday_step_advanced_during_execution:${workdayExecutorRuntimeContext.step}->${currentStep}`
+    );
+    return;
+  }
+
+  await throwWorkdayExecutorRuntimeError(page, "step_container_gone");
 }
 
 async function withWorkdayExecutorGuard<T>(
@@ -798,9 +839,20 @@ export async function extractVisibleOptions(page: Page, fieldOrContainer: Resolv
 
   const kind = await detectResolvedFieldKind(page, field);
   if (kind === "native_select") {
+    // textContent, not innerText. An <option> inside a closed <select> is not
+    // rendered, so innerText is "" for every one of them -- which read as "this
+    // field has no options" and left the answer engine nothing to choose from.
     return withWorkdayExecutorGuard(page, "extract_visible_options_native_select", field.controlSelector, async () =>
-      page.locator(field.controlSelector).first().locator("option").allInnerTexts()
-        .then((values) => Array.from(new Set(values.map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))))
+      page.locator(field.controlSelector).first().evaluate((element) => {
+        const select = element as HTMLSelectElement;
+        return Array.from(select.options)
+          // The leading placeholder is not an answer. Workday writes it as an
+          // empty value, whatever the label happens to say.
+          .filter((option) => option.value !== "")
+          .map((option) => (option.textContent || option.value || "").replace(/\s+/g, " ").trim())
+          .filter(Boolean);
+      })
+        .then((values) => Array.from(new Set(values)))
         .catch(() => [] as string[])
     );
   }

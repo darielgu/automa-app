@@ -15,8 +15,7 @@ import {
   ashbyHasBotChallengeIndicators,
   ashbyHasConfirmationText,
   ashbySampleDelayMs,
-  ashbyUrlMatchesSuccess
-} from "./ashby.js";
+  ashbyUrlMatchesSuccess, stripAshbyEmbedParam } from "./ashby.js";
 import type { CandidateProfile } from "../core/types.js";
 
 test("ashbyHasConfirmationText matches common confirmation copy variants", () => {
@@ -2268,4 +2267,24 @@ test("ashbyClassifySubmissionOutcome returns pending when no strict or soft evid
   });
 
   assert.equal(classified.outcome, "pending_confirmation");
+});
+
+test("ashby embed parameter is stripped before navigation", () => {
+  // Job boards commonly link the ?embed=true variant. That renders a trimmed
+  // widget whose fields the extractor cannot see, which produced runs that
+  // reported "filled" having filled nothing.
+  assert.equal(
+    stripAshbyEmbedParam("https://jobs.ashbyhq.com/acme/abc/application?embed=true"),
+    "https://jobs.ashbyhq.com/acme/abc/application"
+  );
+  assert.equal(
+    stripAshbyEmbedParam("https://jobs.ashbyhq.com/acme/abc/application?embed=true&utm_source=x"),
+    "https://jobs.ashbyhq.com/acme/abc/application?utm_source=x"
+  );
+});
+
+test("ashby urls without an embed parameter are left untouched", () => {
+  const url = "https://jobs.ashbyhq.com/acme/abc/application";
+  assert.equal(stripAshbyEmbedParam(url), url);
+  assert.equal(stripAshbyEmbedParam("not-a-url"), "not-a-url");
 });

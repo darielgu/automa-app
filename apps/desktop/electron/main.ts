@@ -1266,6 +1266,22 @@ async function executeRun(permit: SchedulerPermit) {
         notes: outcome.notes,
         error: outcome.error
       };
+    } else if (!run.submitted && (run.filledFields?.length ?? 0) === 0) {
+      // The engine reached the page and reported success, but nothing was
+      // actually filled. Reporting that as a clean "completed" is exactly the
+      // false success this product promises not to give: the user would believe
+      // an application had been worked on when it had not. Some forms sit
+      // behind an extra step, or render fields the extractor cannot see.
+      run.status = "failed";
+      run.failureDetail = {
+        reason: "no_fields_filled",
+        notes: [
+          "Automa opened the application but could not find any fields to fill.",
+          "This usually means the form is behind another step, or the page renders its fields in a way Automa cannot read yet.",
+          "Open it externally and apply by hand.",
+          ...(outcome?.notes ?? [])
+        ]
+      };
     } else {
       run.failureDetail = undefined;
     }

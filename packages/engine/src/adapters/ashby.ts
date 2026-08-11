@@ -581,6 +581,24 @@ export function ashbyHasBotChallengeIndicators(
   return ashbyCollectBotChallengeEvidence(bodyText, iframeSources, selectorMatches, scriptSources).length > 0;
 }
 
+/**
+ * Removes the `embed` parameter from an Ashby application URL.
+ *
+ * Ashby serves a cut-down widget for embedded use. Its fields are not present
+ * in the form the extractor scans, so an embed URL yields a run that reports
+ * "filled" having filled nothing.
+ */
+export function stripAshbyEmbedParam(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.searchParams.has("embed")) return rawUrl;
+    parsed.searchParams.delete("embed");
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 export class AshbyAdapter extends BaseAdapter {
   readonly platform = "ashby" as const;
 
@@ -677,7 +695,14 @@ export class AshbyAdapter extends BaseAdapter {
 
     try {
       logPhase("goto_start", { timeoutMs: config.timeoutMs });
-      await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: config.timeoutMs });
+      // Job boards frequently link the ?embed=true variant, which renders a
+      // trimmed widget whose fields the extractor cannot see. Navigate to the
+      // full application page instead. The stored URL is left untouched.
+      const navigationUrl = stripAshbyEmbedParam(target.url);
+      if (navigationUrl !== target.url) {
+        result.notes.push("ashby_embed_param_stripped");
+      }
+      await page.goto(navigationUrl, { waitUntil: "domcontentloaded", timeout: config.timeoutMs });
       await page.waitForTimeout(1000);
       logPhase("goto_done", { finalUrl: page.url() });
       if (fixtureCaptureEnabled) {

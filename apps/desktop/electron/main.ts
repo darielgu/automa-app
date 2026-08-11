@@ -29,7 +29,7 @@ import {
   moveAppliedStage, saveProfile, setAppliedNotes, upsertAppliedJob, getSetting,
   setSetting, type TrackerStage
 } from "./db/app-repo.js";
-import { getJob, jobFacets, queryJobs, setJobFeedback, type JobQuery } from "./db/jobs-repo.js";
+import { getJob, jobFacets, queryJobs, setJobFeedback, upsertJobs, type JobQuery } from "./db/jobs-repo.js";
 import { feedStatus, syncJobFeed } from "./job-feed/sync.js";
 
 type QueueEntry = RunOutcome & {
@@ -144,6 +144,27 @@ function resolveAsset(fileName: string): string {
   return path.join(rendererDir, fileName);
 }
 
+// Set before anything reads app.getPath("userData"): otherwise the directory
+// is derived from the package name (@automa/desktop) instead of the product.
+app.setName("Automa");
+// setPath throws if the target does not exist yet, so create it first. Without
+// this the app dies silently before whenReady and never opens a window.
+const userDataDir = path.join(app.getPath("appData"), "Automa");
+mkdirSync(userDataDir, { recursive: true });
+app.setPath("userData", userDataDir);
+
+// Only one instance may own the CDP port and the database.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 const statePath = path.join(app.getPath("userData"), "automa-state.json");
 
 // One local database. Opened lazily so a migration failure surfaces as a real
@@ -165,6 +186,46 @@ function emitRunEvent(runId: string, event: string, data?: unknown, level = "inf
     console.error("Failed to record run event", error);
   }
   mainWindow?.webContents.send("run:events", { runId, event, data, level, ts: new Date().toISOString() });
+}
+
+/**
+ * The bundled demo application. Guest mode needs somewhere safe to prove the
+ * automation really works: a fictional persona pointed at a real posting would
+ * send junk to a real company.
+ */
+const DEMO_JOB_ID = "00000000-0000-4000-8000-00000000d3m0";
+
+function demoJobUrl(): string {
+  return `file://${path.join(appRoot, "resources", "demo", "greenhouse-demo.html")}`;
+}
+
+function seedDemoJob(): void {
+  const url = demoJobUrl();
+  upsertJobs(db(), [
+    {
+      simplify_id: DEMO_JOB_ID,
+      source_repos: ["demo"],
+      company_name: "Automa Demo Co",
+      company_url: null,
+      title: "Software Engineer (built-in demo application)",
+      url,
+      dedupe_key: url,
+      apply_host: "localhost",
+      ats_platform: "greenhouse",
+      category: "Software Engineering",
+      locations: ["Remote"],
+      terms: ["Demo"],
+      degrees: [],
+      sponsorship: null,
+      source: "automa-demo",
+      feed_active: true,
+      is_visible: true,
+      date_posted: Math.floor(Date.now() / 1000),
+      date_updated: Math.floor(Date.now() / 1000),
+      content_hash: "demo",
+      flags: ["demo"]
+    }
+  ]);
 }
 
 /** Puts a finished run on the tracker board. */
@@ -195,27 +256,6 @@ let sharedHistoryWrite = Promise.resolve();
 let schedulerRunning = false;
 let schedulerWakeRequested = false;
 let schedulerSuspendedReason: string | null = null;
-
-// Set before anything reads app.getPath("userData"): otherwise the directory
-// is derived from the package name (@automa/desktop) instead of the product.
-app.setName("Automa");
-// setPath throws if the target does not exist yet, so create it first. Without
-// this the app dies silently before whenReady and never opens a window.
-const userDataDir = path.join(app.getPath("appData"), "Automa");
-mkdirSync(userDataDir, { recursive: true });
-app.setPath("userData", userDataDir);
-
-// Only one instance may own the CDP port and the database.
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  app.on("second-instance", () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-}
 
 app.commandLine.appendSwitch("remote-debugging-port", String(Number(process.env.AUTOMA_EMBEDDED_DEBUG_PORT || 0)));
 
@@ -802,7 +842,7 @@ function buildWorkerAutomationConfig(input: {
       }
     },
     browser: {
-      cdpUrl: `http://127.0.0.1:${config.automationDebugPort || readDevToolsPort()}`,
+      cdpUrl: `http://127.0.0.1:${readDevToolsPort()}`,
       cdpPageTitle: runTitle,
       cdpPageUrlPattern: runMarker,
       reuseAnchorPage: true,
@@ -1601,6 +1641,7 @@ app.whenReady().then(() => {
       previousEmployers: GUEST_PERSONA.previousEmployers ?? [],
       isDemo: true
     });
+    seedDemoJob();
     setSetting(db(), "guest_mode", "1");
     setSetting(db(), "onboarding_completed", "1");
 
@@ -1608,6 +1649,10 @@ app.whenReady().then(() => {
     return readState();
   });
   ipcMain.handle("desktop:is-guest", () => getSetting(db(), "guest_mode") === "1");
+  ipcMain.handle("desktop:seed-demo-job", () => {
+    seedDemoJob();
+    return getJob(db(), DEMO_JOB_ID);
+  });
   ipcMain.handle("runs:events", (_event, runId: string, afterId?: number) =>
     listRunEvents(db(), String(runId), Number(afterId ?? 0))
   );

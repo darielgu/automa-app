@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Software Engineer — Demo Application | Automa Demo Co</title>
+<style>
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #171a24; max-width: 46rem; margin: 0 auto; padding: 40px 24px; background: #fcfbf8; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: rgba(23,26,36,0.62); margin-bottom: 28px; font-size: 14px; }
+  .banner { border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 12px 14px; font-size: 13px; margin-bottom: 24px; }
+  label { display: block; font-size: 13px; font-weight: 500; margin: 16px 0 6px; }
+  .req::after { content: " *"; color: #e97b63; }
+  input[type=text], input[type=email], input[type=tel], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid rgba(11,16,32,0.18); background: #fff;
+    font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  textarea { min-height: 90px; }
+  button { margin-top: 24px; padding: 10px 18px; background: #0b1020; color: #fff; border: 0; font-size: 14px; cursor: pointer; }
+  #confirmation { display: none; border: 1px solid rgba(11,16,32,0.12); background: #fff; padding: 24px; }
+  .error { color: #b3311a; font-size: 12px; margin-top: 4px; display: none; }
+</style>
+</head>
+<body>
+
+<div id="form-view">
+  <h1>Software Engineer</h1>
+  <div class="sub">Automa Demo Co · Remote · Full-time</div>
+
+  <div class="banner">
+    <strong>This is Automa's built-in demo application.</strong>
+    It is a local file, not a real job posting. Nothing is submitted anywhere and
+    no company receives anything. It exists so you can watch the automation fill
+    a form end to end before you point it at a real application.
+  </div>
+
+  <!-- Field names and the application-form wrapper mirror Greenhouse's markup so
+       the real Greenhouse adapter drives this page, rather than a special case
+       that would prove nothing. -->
+  <form id="application_form" class="application-form">
+    <label class="req" for="first_name">First Name</label>
+    <input type="text" id="first_name" name="job_application[first_name]" autocomplete="given-name" required />
+
+    <label class="req" for="last_name">Last Name</label>
+    <input type="text" id="last_name" name="job_application[last_name]" autocomplete="family-name" required />
+
+    <label class="req" for="email">Email</label>
+    <input type="email" id="email" name="job_application[email]" autocomplete="email" required />
+
+    <label for="phone">Phone</label>
+    <input type="tel" id="phone" name="job_application[phone]" autocomplete="tel" />
+
+    <label for="location">Location</label>
+    <input type="text" id="location" name="job_application[location]" />
+
+    <label class="req" for="resume">Resume</label>
+    <input type="file" id="resume" name="job_application[resume]" required />
+
+    <label class="req" for="work_auth">Are you legally authorized to work in the United States?</label>
+    <select id="work_auth" name="job_application[answers][work_auth]" required>
+      <option value="">Select…</option>
+      <option value="Yes">Yes</option>
+      <option value="No">No</option>
+    </select>
+
+    <label class="req" for="sponsorship">Will you now or in the future require sponsorship?</label>
+    <select id="sponsorship" name="job_application[answers][sponsorship]" required>
+      <option value="">Select…</option>
+      <option value="Yes">Yes</option>
+      <option value="No">No</option>
+    </select>
+
+    <label for="years">How many years of professional experience do you have?</label>
+    <input type="text" id="years" name="job_application[answers][years_experience]" />
+
+    <label for="why">Why do you want to work here?</label>
+    <textarea id="why" name="job_application[answers][why]"></textarea>
+
+    <!-- Protected questions. Automa must never let a model guess these: it has
+         to either use an explicit profile answer or stop and ask. -->
+    <label for="gender">Gender (optional)</label>
+    <select id="gender" name="job_application[demographics][gender]">
+      <option value="">Select…</option>
+      <option>Male</option>
+      <option>Female</option>
+      <option>Decline to self identify</option>
+    </select>
+
+    <label for="veteran">Veteran status (optional)</label>
+    <select id="veteran" name="job_application[demographics][veteran]">
+      <option value="">Select…</option>
+      <option>I am a protected veteran</option>
+      <option>I am not a protected veteran</option>
+      <option>I don't wish to answer</option>
+    </select>
+
+    <div class="error" id="form-error">Please complete every required field.</div>
+    <button type="submit" id="submit_app">Submit Application</button>
+  </form>
+</div>
+
+<div id="confirmation">
+  <h1>Application submitted</h1>
+  <p>Thank you for applying to Automa Demo Co. Your application has been received.</p>
+  <p class="sub">Nothing left this machine. This confirmation is produced by a local demo file.</p>
+</div>
+
+<script>
+  document.getElementById("application_form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var required = ["first_name", "last_name", "email", "work_auth", "sponsorship"];
+    var missing = required.filter(function (id) { return !document.getElementById(id).value; });
+    var resume = document.getElementById("resume");
+    if (missing.length || !resume.files.length) {
+      document.getElementById("form-error").style.display = "block";
+      return;
+    }
+    document.getElementById("form-view").style.display = "none";
+    document.getElementById("confirmation").style.display = "block";
+    document.title = "Application submitted | Automa Demo Co";
+  });
+</script>
+</body>
+</html>

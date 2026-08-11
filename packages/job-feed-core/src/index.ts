@@ -110,6 +110,11 @@ export interface NormalizedListing {
 export function hasGreenhouseUrlSignals(url: string): boolean {
   const normalized = url.toLowerCase();
   if (normalized.includes("greenhouse.io")) return true;
+  // Automa's bundled demo application. It uses Greenhouse markup on purpose so
+  // the real adapter drives it; a demo running through a special-case path
+  // would prove nothing. Adapter selection goes through canHandle, which calls
+  // this function, so the rule has to live here rather than in detectPlatform.
+  if (normalized.includes("automa-demo") || normalized.includes("greenhouse-demo.html")) return true;
   try {
     const parsed = new URL(url);
     const ghJid = parsed.searchParams.get("gh_jid");

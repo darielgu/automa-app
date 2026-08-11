@@ -56,6 +56,24 @@ node tooling/scripts/sync-edge-shared.mjs --check  # CI gate
 
 ## Verifying it actually wrote rows
 
+One command covers everything below, using only the public anon key:
+
+```bash
+node tooling/scripts/verify-scrape-deploy.mjs https://<PROJECT_REF>.supabase.co <ANON_KEY>
+```
+
+It checks the corpus filled, that keyset paging returns every row exactly once,
+that the anon key is refused on all three write paths, that
+`scrape_source_state` stays invisible, and that a scrape run was actually
+recorded. Run it after the first manual trigger and before applying the cron
+migration -- an empty `scrape_runs` table is the signature of the Vault secret
+and the function secret disagreeing, which otherwise fails as a silent 401
+every hour. It exits non-zero when anything is wrong, and refuses a
+service_role key, which would pass every check by bypassing the rules it is
+supposed to be testing.
+
+The individual queries, if you want to look yourself:
+
 ```sql
 select count(*) as total,
        count(*) filter (where feed_active and is_visible and removed_at is null) as active,

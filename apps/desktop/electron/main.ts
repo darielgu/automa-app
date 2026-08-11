@@ -1507,6 +1507,24 @@ async function closeRunBrowser(runId: string) {
   await syncEmbeddedBrowserDrawer();
 }
 
+/**
+ * Hands a URL to the user's browser, if it is the kind of URL a browser opens.
+ *
+ * shell.openExternal passes whatever it is given to the OS, which will happily
+ * act on file:, smb: or a custom scheme registered by some other application.
+ * The only URLs this app ever needs to open are job postings.
+ */
+async function openExternalUrl(rawUrl: string): Promise<void> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return;
+  await shell.openExternal(parsed.toString()).catch(() => undefined);
+}
+
 function createWindow() {
   const preloadPath = resolvePreload();
   const iconPath = resolveAsset("Automa.png");
@@ -1523,6 +1541,15 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false
     }
+  });
+
+  // Anything the app asks to open in a new window is an external job posting.
+  // Without a handler, Electron's default is "allow", which opens the site in a
+  // bare BrowserWindow -- no address bar, no back button, and inheriting this
+  // app's webPreferences. Hand it to the real browser instead.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void openExternalUrl(url);
+    return { action: "deny" };
   });
 
   // A file dropped anywhere outside the drop target would otherwise navigate
@@ -1765,7 +1792,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("desktop:parse-resume", () => parseCurrentResume());
   ipcMain.handle("desktop:open-external", async (_event, url: string) => {
-    await shell.openExternal(url);
+    await openExternalUrl(url);
   });
   ipcMain.handle("desktop:open-automation-browser", async (_event, url?: string) => {
     await openAutomationBrowser(url);
@@ -1916,6 +1943,19 @@ app.on("before-quit", () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+// Without this, Cmd+W is a trap. window-all-closed deliberately keeps the app
+// alive on macOS, so closing the window left a process in the Dock with no way
+// to get a window back and no way to reach the runs it was still executing.
+app.on("activate", () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+  createWindow();
 });
 
 function safelyPauseActiveRuns(reason: string) {

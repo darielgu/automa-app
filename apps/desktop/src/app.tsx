@@ -2115,7 +2115,7 @@ function JobsPage({
 
                     <div className="desktop-job-expansion__actions">
                       <div className="flex flex-wrap justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => window.open(job.sourceUrl, "_blank", "noopener,noreferrer")} className="cursor-pointer">
+                        <Button type="button" variant="outline" onClick={() => void desktopBridge.openExternal(job.sourceUrl)} className="cursor-pointer">
                           <ArrowUpRight className="size-4" />
                           Open externally
                         </Button>
@@ -2983,7 +2983,7 @@ function AppliedPage({
                                     className="h-7 px-2.5 text-[0.72rem]"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      window.open(job.sourceUrl, "_blank", "noopener,noreferrer");
+                                      void desktopBridge.openExternal(job.sourceUrl);
                                     }}
                                   >
                                     <ArrowUpRight className="size-3.5" />
@@ -3149,7 +3149,7 @@ function ApplicationDetailPage({
                 type="button"
                 variant="outline"
                 className="h-9"
-                onClick={() => window.open(appliedJob.sourceUrl, "_blank", "noopener,noreferrer")}
+                onClick={() => void desktopBridge.openExternal(appliedJob.sourceUrl)}
               >
                 <ArrowUpRight className="size-4" />
                 Open posting

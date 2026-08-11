@@ -1,0 +1,57 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      # Never pick up a signing identity from the runner keychain: this project
+      # ships deliberately unsigned and a surprise identity would change that.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - run: node tooling/scripts/sync-edge-shared.mjs --check
+      - run: npm run check
+      - run: npm run build
+      - run: npm test
+
+      - name: build both DMGs
+        run: npm run dist -w @automa/desktop
+
+      - name: checksums
+        working-directory: apps/desktop/release
+        run: |
+          shasum -a 256 *.dmg > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/SHA256SUMS.txt
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            Download the DMG for your Mac and drag Automa to Applications.
+
+            The app is unsigned, so macOS will refuse the first launch.
+            **Right-click the app → Open → Open.** Once, then never again.
+
+            Or: `xattr -dr com.apple.quarantine /Applications/Automa.app`
+
+            Verify your download against `SHA256SUMS.txt` below.

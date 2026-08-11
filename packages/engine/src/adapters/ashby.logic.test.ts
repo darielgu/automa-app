@@ -76,7 +76,7 @@ test("ashbyCollectBotChallengeEvidence returns explicit evidence tags", () => {
 });
 
 test("ashbyIsAnsweredControl validates canonical control states", () => {
-  assert.equal(ashbyIsAnsweredControl({ kind: "url", value: "https://github.com/dariel" }), true);
+  assert.equal(ashbyIsAnsweredControl({ kind: "url", value: "https://github.com/alex-rivera" }), true);
   assert.equal(ashbyIsAnsweredControl({ kind: "radio", checkedCount: 1 }), true);
   assert.equal(ashbyIsAnsweredControl({ kind: "yes_no_button", selected: true }), true);
   assert.equal(ashbyIsAnsweredControl({ kind: "textarea", value: "I built resilient automation flows." }), true);
@@ -135,12 +135,12 @@ test("ashby targeted deterministic fallbacks cover known blocker intents", () =>
   const adapter = new AshbyAdapter();
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     },
     links: {
-      github: "https://github.com/darielgutierrez"
+      github: "https://github.com/alex-riverarivera"
     },
     experience: {
       years: 3
@@ -152,14 +152,14 @@ test("ashby targeted deterministic fallbacks cover known blocker intents", () =>
     "Given Name",
     profile
   );
-  assert.equal(givenName, "Dariel");
+  assert.equal(givenName, "Alex");
 
   const surname = (adapter as any).targetedFallbackValue(
     { id: "q0b", label: "Family Name", required: true, type: "text", selector: "", tag: "input" },
     "Family Name",
     profile
   );
-  assert.equal(surname, "Gutierrez");
+  assert.equal(surname, "Rivera");
 
   const firstJob = (adapter as any).targetedFallbackValue(
     { id: "q1", label: "Is this your first job?", required: true, type: "single_select", selector: "", tag: "input", options: ["Yes", "No"] },
@@ -216,7 +216,7 @@ test("ashby targeted deterministic fallbacks cover known blocker intents", () =>
     "GitHub or code sample URL",
     profile
   );
-  assert.equal(github, "https://github.com/darielgutierrez");
+  assert.equal(github, "https://github.com/alex-riverarivera");
 
   const linkedin = (adapter as any).targetedFallbackValue(
     { id: "q5b", label: "LinkedIn Profile", required: true, type: "text", selector: "", tag: "input" },
@@ -225,11 +225,11 @@ test("ashby targeted deterministic fallbacks cover known blocker intents", () =>
       ...profile,
       links: {
         ...profile.links,
-        linkedin: "https://linkedin.com/in/dariel-gutierrez"
+        linkedin: "https://linkedin.com/in/alex-rivera-rivera"
       }
     }
   );
-  assert.equal(linkedin, "https://linkedin.com/in/dariel-gutierrez");
+  assert.equal(linkedin, "https://linkedin.com/in/alex-rivera-rivera");
 
   const commute = (adapter as any).targetedFallbackValue(
     {
@@ -293,10 +293,10 @@ test("ashby profile-like prompts do not fall back to narrative summary text", ()
   const adapter = new AshbyAdapter();
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      fullName: "Dariel Gutierrez",
-      email: "dariel@example.com",
+      firstName: "Alex",
+      lastName: "Rivera",
+      fullName: "Alex Rivera",
+      email: "alex.rivera@example.com",
       phone: "619-555-1234",
       location: "San Diego, CA"
     },
@@ -312,7 +312,7 @@ test("ashby profile-like prompts do not fall back to narrative summary text", ()
     { id: "q1", label: "First Name", required: true, type: "text", selector: "", tag: "input" },
     profile
   );
-  assert.equal(firstName, "Dariel");
+  assert.equal(firstName, "Alex");
 
   const pronouns = (adapter as any).autofillFallbackValue(
     { id: "q2", label: "Pronouns", required: true, type: "text", selector: "", tag: "input" },
@@ -321,16 +321,16 @@ test("ashby profile-like prompts do not fall back to narrative summary text", ()
   assert.equal(pronouns, "He/Him");
 
   const missingLabelFallback = (adapter as any).fallbackTextForMissingLabel("Last Name", profile);
-  assert.equal(missingLabelFallback, "Gutierrez");
+  assert.equal(missingLabelFallback, "Rivera");
 });
 
 test("ashby source mapping order prefers online job board, then LinkedIn, then company website", () => {
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     }
   };
 
@@ -398,9 +398,9 @@ test("ashby missing-label text fallback uses intent resolver and deterministic t
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     },
     experience: {
       summary: "Founder summary that should not leak into generic missing-label recovery."
@@ -437,9 +437,9 @@ test("ashby date-like fallback defaults to today's date and respects placeholder
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     }
   };
 
@@ -502,9 +502,9 @@ test("ashby strict required text keeps llm narrative for unknown prompts when po
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     }
   };
   const field = {
@@ -535,9 +535,9 @@ test("ashby strict required protected follow-up does not keep llm narrative", ()
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     }
   };
   const field = {
@@ -709,7 +709,7 @@ test("ashby live-dom extraction handles Back Market location fieldset without da
     const schema = await adapter.extractSingleFieldSchemaFromLiveDom(
       page,
       "Please confirm which location(s) you would be available to work from ?",
-      { basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" } },
+      { basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" } },
       { answer: null, selectedOptions: [], failureReason: "required" }
     );
     assert.ok(schema);
@@ -909,7 +909,7 @@ test("ashby office fallback resolver prefers direct match, then best office matc
   const direct = (adapter as any).resolveOfficeOption(
     ["San Francisco, CA", "New York, NY"],
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Francisco, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Francisco, CA" },
       customAnswers: { "open to relocating anywhere": true }
     },
     "San Francisco, CA",
@@ -920,7 +920,7 @@ test("ashby office fallback resolver prefers direct match, then best office matc
   const bestMatch = (adapter as any).resolveOfficeOption(
     ["Austin, TX", "San Francisco, CA", "London, UK"],
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States",
       customAnswers: { "open to relocating anywhere": true }
@@ -936,7 +936,7 @@ test("ashby location-availability selector chooses best profile-context option",
   const selected = adapter.resolveLocationAvailabilitySelections(
     ["Paris", "Bordeaux", "Barcelona", "Berlin", "San Francisco, CA"],
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     },
@@ -951,7 +951,7 @@ test("ashby location-availability selector falls back to office resolver when no
   const selected = adapter.resolveLocationAvailabilitySelections(
     ["Paris", "Bordeaux", "Barcelona", "Berlin"],
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     },
@@ -1041,7 +1041,7 @@ test("ashby location-aware fallback handles 'currently based' prompt labels", ()
       type: "text"
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" }
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" }
     }
   );
   assert.equal(value, "San Diego, California, United States");
@@ -1056,7 +1056,7 @@ test("ashby location-aware fallback prefers profile location over posting locati
       options: ["San Diego, CA", "New York, NY"]
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     },
@@ -1074,7 +1074,7 @@ test("ashby country-of-residence prompt prefers profile country and not city", (
       options: ["United Kingdom", "United States"]
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     },
@@ -1089,7 +1089,7 @@ test("ashby country-of-residence prompt prefers profile country and not city", (
       options: undefined
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     },
@@ -1115,7 +1115,7 @@ test("ashby hybrid work preference selects remote when profile is not near liste
       ]
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     }
@@ -1140,7 +1140,7 @@ test("ashby accommodations prompt defaults to no", () => {
       ]
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" }
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" }
     }
   );
   assert.equal(value, "No, I do not require any accommodations at this time");
@@ -1173,7 +1173,7 @@ test("ashby work-authorization prompt maps to yes when authorizedToWork is true"
       options: ["Yes", "No"]
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       workAuthorization: { authorizedToWork: true, requiresSponsorship: false }
     }
   );
@@ -1192,7 +1192,7 @@ test("ashby accommodation follow-up prompt defaults to N/A", () => {
       tag: "textarea"
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       experience: { summary: "Founder summary should not be used here." }
     }
   );
@@ -1212,7 +1212,7 @@ test("ashby accommodation follow-up never falls back to profile summary", () => 
     },
     "If you selected yes, how can we support you? Your privacy matters to us.",
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "This should not appear in accommodation follow-up fields." }
     }
   );
@@ -1232,7 +1232,7 @@ test("ashby conditional text follow-up falls back to deterministic N/A and not p
     },
     "If yes, please explain",
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "This should never be used for conditional follow-up." }
     }
   );
@@ -1255,7 +1255,7 @@ test("ashby quoted conditional prompts classify as conditional follow-up and res
     },
     "If you selected “Yes,” please explain.",
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "Should not be used." }
     }
   );
@@ -1274,7 +1274,7 @@ test("ashby referral detail prompt is treated as conditional follow-up and not a
     tag: "input"
   };
   const profile: CandidateProfile = {
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" }
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" }
   };
 
   const mapped = adapter.resolveProfilePromptValue(field, profile, undefined, undefined);
@@ -1296,7 +1296,7 @@ test("ashby generic open text prompt resolves to deterministic final fallback in
       tag: "textarea"
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "Founder summary that should not leak here." }
     }
   );
@@ -1315,7 +1315,7 @@ test("ashby explicit summary prompts may use profile summary fallback when enabl
       tag: "textarea"
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "Founder building reliable TypeScript automation systems." }
     },
     undefined,
@@ -1339,7 +1339,7 @@ test("ashby explicit summary prompts fall back to deterministic final fallback w
       tag: "textarea"
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "Founder summary that should be blocked when disabled." }
     },
     undefined,
@@ -1397,9 +1397,9 @@ test("ashby narrative fallback covers AI build/program prompts with substantive 
   const adapter = new AshbyAdapter();
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     },
     experience: {
       summary: "Founder building AI/browser-agent job automation systems and former Software Engineer Intern at Salesforce."
@@ -1460,7 +1460,7 @@ test("ashby strict required mode keeps LLM answer for open-ended prompts", () =>
     field,
     raw,
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" }
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" }
     },
     "Notable",
     "Program Manager",
@@ -1476,7 +1476,7 @@ test("ashby strict required mode keeps LLM answer for open-ended prompts", () =>
 test("ashby resolveEffectiveAnswerForField in strict required mode does not synthesize fallback answers", () => {
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
     experience: { summary: "Built reliable automation systems in TypeScript." }
   };
 
@@ -1544,7 +1544,7 @@ test("ashby keeps llm narrative for open-ended prompts when content is valid", (
     field,
     raw,
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "Founder building automation systems", currentCompany: "Automa", currentTitle: "Founder" },
       skillsSummary: "TypeScript, Playwright, Node.js"
     },
@@ -1580,7 +1580,7 @@ test("ashby narrative quality guardrail keeps specific llm narrative", () => {
     field,
     raw,
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
       experience: { summary: "Founder building automation systems", currentCompany: "Automa", currentTitle: "Founder" },
       skillsSummary: "TypeScript, Playwright, Node.js"
     },
@@ -1610,7 +1610,7 @@ test("ashby shouldAskLlmForField keeps required narrative prompts in Phase B", (
 test("ashby resolveProfileRuleSeededOnly does not emit fallback for unresolved required field", () => {
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" }
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" }
   };
   const field = {
     id: "q_required_unknown",
@@ -1668,7 +1668,7 @@ test("ashby shouldAskLlmForField allows optional freeform narrative when explici
 test("ashby ensureRequiredNarrativeFallbackValue never leaves required narrative as N/A", () => {
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
     experience: { summary: "Founder building reliable automation systems in TypeScript." }
   };
   const field = {
@@ -1685,7 +1685,7 @@ test("ashby ensureRequiredNarrativeFallbackValue never leaves required narrative
 test("ashby office willingness fallback guard flips unsafe No to Yes when profile indicates relocation openness", () => {
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" },
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" },
     customAnswers: {
       "Open to relocation": "Yes"
     }
@@ -1707,7 +1707,7 @@ test("ashby office willingness fallback guard flips unsafe No to Yes when profil
 test("ashby office willingness fallback guard enforces semantic consistency with prior relocation Yes", () => {
   const adapter = new AshbyAdapter() as any;
   const profile: CandidateProfile = {
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" }
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" }
   };
   const result: any = {
     filledFields: [
@@ -1792,7 +1792,7 @@ test("ashby runFillPass logs phase-b llm request telemetry with labels and inclu
       resolve: async () => [{ questionId: "q_age", value: "Under 30", source: "llm", reason: "llm_batch" }]
     },
     profile: {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" }
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" }
     },
     resumeText: "",
     config: {
@@ -1844,13 +1844,13 @@ test("ashby targeted fallback uses safe values for project/password/replit and n
   const adapter = new AshbyAdapter();
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     },
     links: {
       github: "https://github.com/darielgu",
-      portfolio: "https://aboutdariel.me"
+      portfolio: "https://aboutalex-rivera.me"
     }
   };
 
@@ -1859,7 +1859,7 @@ test("ashby targeted fallback uses safe values for project/password/replit and n
     "Project URL",
     profile
   );
-  assert.equal(projectUrl, "https://aboutdariel.me");
+  assert.equal(projectUrl, "https://aboutalex-rivera.me");
 
   const projectPassword = (adapter as any).targetedFallbackValue(
     { id: "p2", label: "Project Password", required: true, type: "text", selector: "", tag: "input" },
@@ -1873,7 +1873,7 @@ test("ashby targeted fallback uses safe values for project/password/replit and n
     "Replit Profile URL",
     profile
   );
-  assert.equal(replitProfile, "https://aboutdariel.me");
+  assert.equal(replitProfile, "https://aboutalex-rivera.me");
 
   const veteran = (adapter as any).requiredFallbackValue({
     id: "p4",
@@ -1894,9 +1894,9 @@ test("ashby sensitive policy blocks narrative fallback for credential-like promp
   const adapter = new AshbyAdapter();
   const profile: CandidateProfile = {
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com"
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com"
     },
     experience: {
       summary: "Founder building AI/browser-agent job automation systems."
@@ -1971,7 +1971,7 @@ test("ashby location candidates prefer qualified-first query for typeahead safet
   const values = adapter.buildLocationCandidateValues(
     "Current Location",
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     }
@@ -1990,7 +1990,7 @@ test("ashby location fallback triggers by location-like field id even with gener
       options: undefined
     },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     }
@@ -2001,7 +2001,7 @@ test("ashby location fallback triggers by location-like field id even with gener
 test("ashby resolves structured location into ashby query and canonical target", () => {
   const adapter = new AshbyAdapter() as any;
   const spec = adapter.resolveAshbyLocationSpec({
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
     locationStructured: {
       city: "San Diego",
       region: "California",
@@ -2017,7 +2017,7 @@ test("ashby resolves structured location into ashby query and canonical target",
 test("ashby derives ashby location query/target from legacy flat profile location", () => {
   const adapter = new AshbyAdapter() as any;
   const spec = adapter.resolveAshbyLocationSpec({
-    basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+    basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
     state: "California",
     country: "United States"
   });
@@ -2029,9 +2029,9 @@ test("ashby resolves city-state-country query from street-address profile locati
   const adapter = new AshbyAdapter() as any;
   const spec = adapter.resolveAshbyLocationSpec({
     basics: {
-      firstName: "Dariel",
-      lastName: "Gutierrez",
-      email: "dariel@example.com",
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex.rivera@example.com",
       location: "1497 Oakpoint Ave, San Diego, 91913, California"
     },
     state: "California",
@@ -2057,7 +2057,7 @@ test("ashby location retry does not escalate when dropdown options are visible f
     { waitForTimeout: async () => undefined } as any,
     { id: "loc", label: "Current Location", required: true, type: "text", selector: "", tag: "input" },
     {
-      basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com", location: "San Diego, CA" },
+      basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com", location: "San Diego, CA" },
       state: "California",
       country: "United States"
     },
@@ -2155,7 +2155,7 @@ test("ashby missing field recovery returns recovered labels that are not still r
   const context: any = {
     logger: { info: () => undefined, warn: () => undefined },
     aiEngine: { resolve: async () => [] },
-    profile: { basics: { firstName: "Dariel", lastName: "Gutierrez", email: "dariel@example.com" } },
+    profile: { basics: { firstName: "Alex", lastName: "Rivera", email: "alex.rivera@example.com" } },
     resumeText: "",
     config: { resumePath: "" }
   };

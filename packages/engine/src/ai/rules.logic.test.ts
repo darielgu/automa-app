@@ -5,9 +5,9 @@ import { boolToAnswer, evaluateDeterministicRule, evaluateProfileMapping } from 
 
 const profile: CandidateProfile = {
   basics: {
-    firstName: "Dariel",
-    lastName: "Gutierrez",
-    email: "darielgutierrez332@gmail.com"
+    firstName: "Alex",
+    lastName: "Rivera",
+    email: "alex-riverarivera332@gmail.com"
   },
   country: "United States",
   workAuthorization: {
@@ -15,7 +15,7 @@ const profile: CandidateProfile = {
     requiresSponsorship: false
   },
   links: {
-    linkedin: "https://linkedin.com/in/dariel-gutierrez"
+    linkedin: "https://linkedin.com/in/alex-rivera-rivera"
   },
   education: {
     school: "San Diego State University",
@@ -265,7 +265,7 @@ test("preferred first name maps from basics firstName", () => {
     },
     profile
   );
-  assert.equal(result.answer, "Dariel");
+  assert.equal(result.answer, "Alex");
   assert.equal(result.reason, "preferred_first_name");
 });
 

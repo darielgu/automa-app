@@ -86,7 +86,7 @@ test("review receipt extraction supports description lists and table rows", asyn
           <h3>Profile</h3>
           <dl>
             <dt>First name</dt>
-            <dd>Dariel</dd>
+            <dd>Alex</dd>
           </dl>
         </section>
         <section>
@@ -103,7 +103,7 @@ test("review receipt extraction supports description lists and table rows", asyn
       {
         section: "Profile",
         question: "First name",
-        answer: "Dariel"
+        answer: "Alex"
       },
       {
         section: "Education",

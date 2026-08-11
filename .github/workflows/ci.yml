@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      # The Edge Function runs a copied version of the shared normalizer. If the
+      # copies drift, the cloud mirror and the on-device fallback would start
+      # producing different rows.
+      - name: shared normalizer is in sync
+        run: node tooling/scripts/sync-edge-shared.mjs --check
+
+      - run: npm run check
+      - run: npm run build
+      - run: npm test
+      - run: npm run test -w @automa/desktop
+
+      - name: install a browser for the adapter tests
+        run: npx playwright install chromium chromium-headless-shell
+      - run: npm run test:dom -w @automa/automation-engine
+
+      # Packaging breaks in ways nothing else catches, so build it every time.
+      - name: packaging smoke test
+        run: npm run bundle -w @automa/desktop

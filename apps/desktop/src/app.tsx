@@ -528,11 +528,19 @@ interface LocalAppliedRecord {
   updatedAt: string;
 }
 
+/** The shape `jobs:status` returns; only the parts the renderer reads. */
+interface FeedStatus {
+  provider: "github" | "supabase";
+  counts?: { total?: number; active?: number };
+}
+
 interface LocalBridge {
   listJobs(query: Record<string, unknown>): Promise<{ jobs: LocalJobRecord[]; total: number }>;
   setJobFeedback(jobId: string, verdict: "liked" | "hidden" | "saved" | null): Promise<boolean>;
   syncJobs(force?: boolean): Promise<unknown>;
-  jobsStatus(): Promise<unknown>;
+  jobsStatus(): Promise<FeedStatus>;
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string | null): Promise<boolean>;
   listApplied(): Promise<LocalAppliedRecord[]>;
   moveApplied(id: string, stage: TrackerStageName, note?: string): Promise<unknown>;
   setAppliedNotes(id: string, notes: string): Promise<boolean>;
@@ -545,12 +553,34 @@ const bridge = (typeof window !== "undefined" && window.automaDesktop
       listJobs: async () => ({ jobs: [], total: 0 }),
       setJobFeedback: async () => true,
       syncJobs: async () => undefined,
-      jobsStatus: async () => undefined,
+      jobsStatus: async () => ({ provider: "github" as const, counts: { total: 0, active: 0 } }),
+      getSetting: async () => null,
+      setSetting: async () => true,
       listApplied: async () => [],
       moveApplied: async () => undefined,
       setAppliedNotes: async () => true,
       appliedTimeline: async () => [],
     }) as LocalBridge;
+
+/**
+ * True when a Supabase key is the service-role one.
+ *
+ * Both keys are JWTs and look alike at a glance, so pasting the wrong one is an
+ * easy mistake — and an expensive one here, because service_role bypasses every
+ * row-level security policy and this app ships its settings to whoever runs it.
+ * The role sits in the payload, which is plain base64url, no signature check
+ * needed to read it.
+ */
+export function looksLikeServiceRoleKey(key: string): boolean {
+  const payload = key.split(".")[1];
+  if (!payload) return false;
+  try {
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    return (JSON.parse(json) as { role?: string }).role === "service_role";
+  } catch {
+    return false;
+  }
+}
 
 /** One short, honest line about what Automa can do with this posting. */
 function describeJobSupport(support?: string): string {
@@ -3400,6 +3430,106 @@ function SettingsPage({
     setConfig((current: DesktopAutomationConfig) => ({ ...current, [key]: value }));
   }
 
+  /**
+   * Supabase mirror settings.
+   *
+   * supabase/README.md has always told users to set these here, and until now
+   * there was no here: the only working path was an environment variable, which
+   * an .app launched from Finder never sees.
+   */
+  const [mirror, setMirror] = useState({ url: "", anonKey: "" });
+  const [mirrorSaved, setMirrorSaved] = useState({ url: "", anonKey: "" });
+  const [mirrorBusy, setMirrorBusy] = useState(false);
+  const [mirrorError, setMirrorError] = useState<string | null>(null);
+  const [mirrorResult, setMirrorResult] = useState<string | null>(null);
+  const [feedProvider, setFeedProvider] = useState<"github" | "supabase" | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [url, anonKey, status] = await Promise.all([
+        bridge.getSetting("supabase_url"),
+        bridge.getSetting("supabase_anon_key"),
+        bridge.jobsStatus().catch(() => null)
+      ]);
+      if (cancelled) return;
+      const loaded = { url: url ?? "", anonKey: anonKey ?? "" };
+      setMirror(loaded);
+      setMirrorSaved(loaded);
+      if (status?.provider) setFeedProvider(status.provider);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const mirrorDirty = mirror.url !== mirrorSaved.url || mirror.anonKey !== mirrorSaved.anonKey;
+
+  async function saveMirror(event: React.FormEvent) {
+    event.preventDefault();
+    const url = mirror.url.trim().replace(/\/$/, "");
+    const anonKey = mirror.anonKey.trim();
+
+    if (!url && !anonKey) {
+      setMirrorError(null);
+      setMirrorBusy(true);
+      try {
+        await bridge.setSetting("supabase_url", null);
+        await bridge.setSetting("supabase_anon_key", null);
+        setMirror({ url: "", anonKey: "" });
+        setMirrorSaved({ url: "", anonKey: "" });
+        setFeedProvider("github");
+        setMirrorResult("Cleared. The feed now comes straight from GitHub.");
+      } finally {
+        setMirrorBusy(false);
+      }
+      return;
+    }
+
+    if (!url || !anonKey) {
+      setMirrorError("A mirror needs both the project URL and the anon key.");
+      return;
+    }
+    // https everywhere, except a self-hosted stack on this machine, which has
+    // no certificate and never leaves the loopback interface.
+    const localhost = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url);
+    if (!localhost && !/^https:\/\/[^\s/]+$/.test(url)) {
+      setMirrorError("The project URL looks like https://yourproject.supabase.co");
+      return;
+    }
+    if (looksLikeServiceRoleKey(anonKey)) {
+      setMirrorError(
+        "That is a service_role key. It bypasses every row-level security rule, and this app is open source. Use the anon key."
+      );
+      return;
+    }
+
+    setMirrorError(null);
+    setMirrorResult(null);
+    setMirrorBusy(true);
+    try {
+      await bridge.setSetting("supabase_url", url);
+      await bridge.setSetting("supabase_anon_key", anonKey);
+      setMirror({ url, anonKey });
+      setMirrorSaved({ url, anonKey });
+
+      // Saving a mirror nobody has tested is how you find out it is wrong a day
+      // later, so sync once now and report which source actually answered.
+      await bridge.syncJobs(true);
+      const status = await bridge.jobsStatus();
+      setFeedProvider(status.provider);
+      setMirrorResult(
+        status.provider === "supabase"
+          ? `Connected. ${status.counts?.active ?? 0} listings came from the mirror.`
+          : "Saved, but the mirror did not answer, so the feed fell back to GitHub. Check the URL and the key."
+      );
+    } catch (cause) {
+      setMirrorError(cause instanceof Error ? cause.message : "The mirror could not be reached.");
+    } finally {
+      setMirrorBusy(false);
+    }
+  }
+
   function renderConfigSaveBar() {
     return (
       <div className="desktop-settings-savebar">
@@ -3683,7 +3813,7 @@ function SettingsPage({
                 ) : (
                   <>
                     <div className="desktop-settings-inline-note">
-                      AI calls are routed through your authenticated Automa API session so provider keys stay on the server.
+                      Answers are generated locally from your profile and resume. No key leaves this machine.
                     </div>
                     <label className="desktop-field">
                       <span className="desktop-field__label">Model</span>
@@ -3695,6 +3825,83 @@ function SettingsPage({
             </Card>
           </div>
           {renderConfigSaveBar()}
+        </form>
+      </div>
+    );
+  }
+
+  function renderJobFeedSection() {
+    return (
+      <div className="desktop-settings-panel-stack">
+        <div className="desktop-settings-hero">
+          <div className="desktop-settings-hero__copy">
+            <span className="desktop-settings-hero__eyebrow">Job feed</span>
+            <h2 className="desktop-settings-hero__title">Where listings come from</h2>
+            <p className="desktop-settings-hero__body">
+              Automa reads the public Simplify job lists from GitHub. That needs no setup and no account. A Supabase
+              mirror is optional: it serves the same rows, already parsed, so the first sync is faster.
+            </p>
+          </div>
+          <Badge variant={feedProvider === "supabase" ? "secondary" : "outline"} className="w-fit">
+            {feedProvider === "supabase" ? "Supabase mirror" : "GitHub"}
+          </Badge>
+        </div>
+
+        <form className="desktop-settings-form" onSubmit={saveMirror}>
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle>Supabase mirror (optional)</CardTitle>
+              <CardDescription>
+                Leave both fields empty to read from GitHub. Everything is stored on this machine.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="desktop-settings-form-grid">
+              <label className="desktop-field">
+                <span className="desktop-field__label">Project URL</span>
+                <Input
+                  value={mirror.url}
+                  placeholder="https://yourproject.supabase.co"
+                  onChange={(event) => setMirror((current) => ({ ...current, url: event.target.value }))}
+                />
+              </label>
+              <label className="desktop-field">
+                <span className="desktop-field__label">Anon key</span>
+                <Input
+                  value={mirror.anonKey}
+                  placeholder="Publishable anon key, never the service role key"
+                  onChange={(event) => setMirror((current) => ({ ...current, anonKey: event.target.value }))}
+                />
+              </label>
+              <div className="desktop-settings-inline-note">
+                The anon key is meant to be public. Row-level security lets it read listings and nothing else, so it
+                cannot write to your project.
+              </div>
+              {mirrorError ? <div className="desktop-settings-inline-note is-error">{mirrorError}</div> : null}
+              <AnimatePresence mode="wait">
+                {mirrorResult && !mirrorError ? (
+                  <motion.div
+                    key={mirrorResult}
+                    className="desktop-settings-inline-note"
+                    variants={swapVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                  >
+                    {mirrorResult}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </CardContent>
+          </Card>
+
+          <div className="desktop-settings-savebar">
+            <span className="desktop-settings-savebar__state">
+              {mirrorBusy ? "Testing the mirror..." : mirrorDirty ? "Unsaved changes" : "Saved."}
+            </span>
+            <Button type="submit" disabled={mirrorBusy || !mirrorDirty}>
+              {mirrorBusy ? "Connecting..." : "Save and test"}
+            </Button>
+          </div>
         </form>
       </div>
     );
@@ -3799,6 +4006,7 @@ function SettingsPage({
           {renderAccountSection()}
           {renderRuntimeSection()}
           {renderAutomationSection()}
+          {renderJobFeedSection()}
           {renderAdvancedSection()}
         </section>
       </div>

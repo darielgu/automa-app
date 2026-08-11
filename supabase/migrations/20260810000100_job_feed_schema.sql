@@ -129,3 +129,20 @@ revoke insert, update, delete, truncate on public.job_listings from anon, authen
 revoke insert, update, delete, truncate on public.scrape_runs  from anon, authenticated;
 grant select on public.job_listings to anon, authenticated;
 grant select on public.scrape_runs  to anon, authenticated;
+
+-- The writer needs explicit table grants.
+--
+-- service_role bypasses row level security, which is easy to mistake for
+-- bypassing permissions. It does not: RLS is checked after the GRANT, so a role
+-- with no grant is refused before any policy is consulted. Without these lines
+-- every scrape run fails with "permission denied for table scrape_runs" -- a
+-- 403 from PostgREST, surfacing as a 500 from the Edge Function, on a schedule
+-- nobody is watching.
+--
+-- Supabase's default privileges usually cover tables created through the
+-- dashboard. They are not a substitute for saying it here, where the rest of
+-- the permission model is written down and can be audited in one read.
+grant select, insert, update on public.job_listings        to service_role;
+grant select, insert, update on public.scrape_runs         to service_role;
+grant select, insert, update on public.scrape_source_state to service_role;
+grant usage on schema public to service_role;

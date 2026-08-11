@@ -130,26 +130,47 @@ async function fetchRepo(
 /**
  * Pulls from the optional Supabase mirror. Rows there were written by the same
  * normalizer, so they land in exactly the same shape as the GitHub path.
+ *
+ * Paginates by keyset through the `search_job_listings` RPC rather than by
+ * OFFSET. At 30k rows OFFSET re-scans and discards every earlier row on each
+ * page, and -- more seriously -- a scrape landing between two pages shifts the
+ * window, so rows get skipped or repeated. The cursor is a value, not a
+ * position, so a concurrent write cannot move it.
  */
 async function fetchFromSupabase(
   config: SupabaseConfig,
   signal?: AbortSignal
 ): Promise<NormalizedListing[]> {
   const pageSize = 1000;
+  const maxPages = 60;
   const collected: NormalizedListing[] = [];
 
-  for (let offset = 0; offset < 60_000; offset += pageSize) {
-    const url =
-      `${config.url}/rest/v1/job_listings` +
-      `?select=*&removed_at=is.null&order=date_posted.desc.nullslast,simplify_id.desc` +
-      `&limit=${pageSize}&offset=${offset}`;
-    const response = await fetch(url, {
-      headers: { apikey: config.anonKey, Authorization: `Bearer ${config.anonKey}`, Accept: "application/json" },
+  let cursorPosted: string | null = null;
+  let cursorId: string | null = null;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const response = await fetch(`${config.url}/rest/v1/rpc/search_job_listings`, {
+      method: "POST",
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify({
+        p_only_active: true,
+        p_limit: pageSize,
+        p_cursor_posted: cursorPosted,
+        p_cursor_id: cursorId
+      }),
       signal
     });
     if (!response.ok) throw new Error(`Supabase mirror returned HTTP ${response.status}`);
 
     const batch = (await response.json()) as Array<Record<string, unknown>>;
+    // Terminate on an empty page only. A short page is not proof of the end:
+    // the RPC clamps p_limit to its own maximum, so asking for more than the
+    // server allows returns a short page forever.
     if (!Array.isArray(batch) || batch.length === 0) break;
 
     for (const row of batch) {
@@ -178,7 +199,13 @@ async function fetchFromSupabase(
       });
     }
 
-    if (batch.length < pageSize) break;
+    const last = batch[batch.length - 1];
+    const nextId = last?.simplify_id ? String(last.simplify_id) : null;
+    // Without an id there is no cursor to advance, and repeating the request
+    // would return the same page forever.
+    if (!nextId || nextId === cursorId) break;
+    cursorPosted = last?.date_posted ? String(last.date_posted) : null;
+    cursorId = nextId;
   }
 
   return collected;

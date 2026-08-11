@@ -1212,6 +1212,13 @@
   line-height: 1.65;
 }
 
+/* Errors carry weight through the border and text, not a fill: design.md
+   reserves solid colour for one action per screen. */
+.desktop-settings-inline-note.is-error {
+  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
+  color: var(--destructive);
+}
+
 .desktop-settings-inline-actions {
   display: flex;
   flex-wrap: wrap;

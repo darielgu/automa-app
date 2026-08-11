@@ -181,9 +181,18 @@ as $$
 $$;
 
 -- Writers are service-role only. Readers are public.
+--
+-- Revoking from PUBLIC removes the default EXECUTE that every new function
+-- carries, and that revoke reaches service_role too, because service_role is a
+-- member of PUBLIC and had no grant of its own. So the grants below are not
+-- redundant: without them the scraper gets "permission denied for function
+-- ingest_job_listings" on every batch, and the corpus never fills.
 revoke execute on function public.ingest_job_listings(uuid, text, jsonb) from public, anon, authenticated;
 revoke execute on function public.touch_repo_listings(text)              from public, anon, authenticated;
 revoke execute on function public.sweep_removed_listings(interval)       from public, anon, authenticated;
+grant execute on function public.ingest_job_listings(uuid, text, jsonb) to service_role;
+grant execute on function public.touch_repo_listings(text)              to service_role;
+grant execute on function public.sweep_removed_listings(interval)       to service_role;
 grant execute on function public.search_job_listings(
   text, text[], text[], text[], text[], boolean, timestamptz, integer, timestamptz, uuid
 ) to anon, authenticated;

@@ -23,3 +23,8 @@ artifacts/
 Thumbs.db
 apps/desktop/release/
 apps/desktop/build/icon.iconset/
+
+# Local Edge Function secrets. Never committed.
+supabase/functions/.env*
+supabase/.temp/
+supabase/.branches/

@@ -1,0 +1,18 @@
+# Minimal config. The CLI refuses to run any command in a directory without
+# this file, which is why `supabase db push` could not be run before.
+#
+# project_id is only a label for local development. The deployed project is
+# chosen by `supabase link --project-ref <ref>`, which writes .temp/ (gitignored)
+# rather than this file, so no project reference is committed here.
+project_id = "automa"
+
+[db]
+# Must match the deployed Postgres major version or `db push` warns on every
+# run. Supabase projects created in 2026 are on 17.
+major_version = 17
+
+[functions.scrape-simplify]
+# The function authenticates callers itself with x-scrape-token, compared in
+# constant time. Supabase's own JWT gate is left on as a second lock: cron
+# sends the service-role key in Authorization.
+verify_jwt = true

@@ -1208,7 +1208,12 @@ export class LeverAdapter extends BaseAdapter {
         };
         const asSelector = (el: Element): string => {
           const id = normalize(el.getAttribute("id"));
-          if (id) return `#${id}`;
+          // Lever names its fields cards[<card>][field0]. Those brackets make
+          // "#cards[work_auth][field0]" an invalid CSS selector, so every
+          // control with a bracketed id silently failed to resolve and the
+          // pre-submit readiness gate then blocked the run. Use the attribute
+          // form, which needs no escaping.
+          if (id) return `${el.tagName.toLowerCase()}[id="${id.replace(/"/g, '\\"')}"]`;
           const name = normalize(el.getAttribute("name"));
           const tag = el.tagName.toLowerCase();
           if (name) return `${tag}[name=\"${name.replace(/"/g, '\\"')}\"]`;

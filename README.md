@@ -14,9 +14,8 @@ machine. No account, no server, no telemetry.
   new-grad boards — about 33,000 listings — into a local database you can search
   instantly, online or off.
 - Drives a real browser inside the app window and fills the application while you
-  watch. **Greenhouse is verified end to end.** Adapters for Lever, Ashby,
-  Workday and Work at a Startup exist and reach the form, but are experimental
-  (see below).
+  watch. **Greenhouse, Lever, Ashby and Work at a Startup are verified end to
+  end.** Workday fills its My Information step; see the table below.
 - Records every run with the fields it filled and the evidence that it did or did
   not submit, then puts finished applications on a tracker board.
 - Ships a one-click demo profile and a built-in practice application, so you can
@@ -49,13 +48,13 @@ About **59% of currently active listings** are on an ATS with a purpose-built
 adapter. Having an adapter is not the same as it working, so the app grades every
 job:
 
-| Platform | State | What is actually proven |
+| Platform | State | What is proven |
 |---|---|---|
 | Greenhouse | **Verified** | Fills the whole form including the resume upload, then stops before submit |
-| Lever | Experimental | Reaches and scans the form; field discovery incomplete |
-| Ashby | Experimental | Extracts every field; writing them back does not verify |
-| Workday | Experimental | Reaches the application step; extraction incomplete |
-| Work at a Startup | Experimental | Does not yet open the message dialog |
+| Lever | **Verified** | Fills 10 fields including both eligibility questions |
+| Ashby | **Verified** | Fills 7 fields including the resume upload |
+| Work at a Startup | **Verified** | Writes and stages the founder message |
+| Workday | Partial | Fills the My Information step (7 fields incl. resume). A real Workday application is several steps behind an account on the employer's tenant, which is not verified here |
 | Everything else | Generic | Fills what it can; you finish |
 
 Each platform ships with a practice application inside the app, built from that

@@ -273,6 +273,21 @@ export class WorkAtAStartupAdapter extends BaseAdapter {
       if (!visible) continue;
       await candidate.click().catch(() => undefined);
       await page.waitForTimeout(400);
+
+      // A synthesised mouse click is delivered by coordinates and hit-testing,
+      // which does not reach a browser view running in the background — the way
+      // the desktop app runs automations while you work. If the click did not
+      // take, dispatch one on the element itself, which does not depend on
+      // pointer position or focus.
+      const opened = await page
+        .locator("[role='dialog']:visible, textarea:visible")
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (!opened) {
+        await candidate.evaluate((node) => (node as HTMLElement).click()).catch(() => undefined);
+        await page.waitForTimeout(400);
+      }
       return;
     }
 

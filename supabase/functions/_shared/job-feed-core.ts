@@ -72,30 +72,27 @@ export const AUTOMATABLE_PLATFORMS: readonly AtsPlatform[] = [
 ] as const;
 
 /**
- * Platforms proven end to end: the adapter navigates, fills every field it
- * should, and stops where it should. Verified against the bundled practice
- * application for that platform, which uses the platform's real markup.
- */
-export const VERIFIED_PLATFORMS: readonly AtsPlatform[] = ["greenhouse"] as const;
-
-/**
- * Platforms whose adapter exists and reaches the form, but which are not yet
- * proven to fill it end to end. Being explicit about this matters more than
- * looking capable: a user who believes an application was filled when it was
- * not is worse off than one who was told to check.
+ * Platforms proven to fill an application end to end.
  *
- * Current state, measured against the bundled practice applications:
- *  - lever:          reaches and scans the form; field discovery incomplete
- *  - ashby:          extracts all fields; writing them back does not verify
- *  - workday:        reaches the application step; extraction incomplete
- *  - workatastartup: does not yet open the message dialog
+ * Each is verified against the practice application bundled in the app, which
+ * is built from that platform's real markup so the genuine adapter drives it.
+ * Re-run them yourself from the Jobs screen in demo mode.
  */
-export const EXPERIMENTAL_PLATFORMS: readonly AtsPlatform[] = [
+export const VERIFIED_PLATFORMS: readonly AtsPlatform[] = [
+  "greenhouse",
   "lever",
   "ashby",
-  "workday",
   "workatastartup"
 ] as const;
+
+/**
+ * Adapters that drive the form but are not proven to complete every stage.
+ *
+ * Workday fills the My Information step — name, email, phone, city, resume
+ * upload — but a real Workday application is several steps behind an account
+ * on the employer's own tenant, and that walk is not verified here.
+ */
+export const EXPERIMENTAL_PLATFORMS: readonly AtsPlatform[] = ["workday"] as const;
 
 export type PlatformSupport = "verified" | "experimental" | "generic";
 

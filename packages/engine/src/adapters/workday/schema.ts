@@ -341,10 +341,36 @@ function hasAny(locator: Locator): Promise<boolean> {
   return locator.count().then((n) => n > 0).catch(() => false);
 }
 
+/**
+ * True when a matching element is on the page and laid out.
+ *
+ * Playwright's isVisible() reports false for everything inside a browser view
+ * the host has marked not visible, which is exactly how the desktop app runs
+ * automations in the background. Step detection then saw an empty page and
+ * concluded the application was not ready. Fall back to the element's own
+ * layout box, which is computed regardless of whether the view is being drawn.
+ */
 async function hasVisible(locator: Locator): Promise<boolean> {
   const count = await locator.count().catch(() => 0);
   for (let i = 0; i < count; i += 1) {
-    if (await locator.nth(i).isVisible().catch(() => false)) return true;
+    const candidate = locator.nth(i);
+    if (await candidate.isVisible().catch(() => false)) return true;
+    const laidOut = await candidate
+      .evaluate((node) => {
+        const element = node as HTMLElement;
+        const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+        if (style && (style.display === "none" || style.visibility === "hidden")) return false;
+        const rect = element.getBoundingClientRect();
+        if (rect.width > 0 || rect.height > 0) return true;
+        // A container whose own box collapsed still counts when it has laid-out
+        // children, which is common for step wrappers.
+        return Array.from(element.children).some((child) => {
+          const childRect = (child as HTMLElement).getBoundingClientRect();
+          return childRect.width > 0 || childRect.height > 0;
+        });
+      })
+      .catch(() => false);
+    if (laidOut) return true;
   }
   return false;
 }

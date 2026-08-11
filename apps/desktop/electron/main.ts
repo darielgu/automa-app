@@ -283,7 +283,21 @@ function recordAppliedJob(run: QueueEntry): void {
     stage: run.submissionConfirmed || run.submitted ? "applied" : "saved"
   });
 }
-const HIDDEN_BROWSER_DRAWER_BOUNDS: Rectangle = { x: 0, y: 0, width: 0, height: 0 };
+/**
+ * Geometry for a run surface the user is not watching.
+ *
+ * This used to be 0x0. That hides the view, but it also gives every element
+ * inside it zero width and height, so Playwright's actionability checks decide
+ * nothing is visible and refuse to click or fill. Adapters that write through
+ * real user-like interaction — Ashby, Lever, Workday, Work at a Startup — then
+ * filled nothing, while Greenhouse happened to work because it sets values
+ * directly. Standalone the same adapters filled the same forms fine, which is
+ * what pointed at the surface rather than the adapters.
+ *
+ * Keep a realistic viewport and move it outside the window instead, so the
+ * layout is real but nothing is drawn on screen.
+ */
+const HIDDEN_BROWSER_DRAWER_BOUNDS: Rectangle = { x: -20000, y: 0, width: 1440, height: 1200 };
 
 let mainWindow: BrowserWindow | null = null;
 let browserDrawerBounds: Rectangle | null = null;

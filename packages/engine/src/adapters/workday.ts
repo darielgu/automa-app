@@ -1132,6 +1132,8 @@ async function createAccountDirect(
   return { ok: false, reason: "account_creation_failed" };
 }
 
+const WORKDAY_PRE_AUTH_APPLICATION_TIMEOUT_MS = 8_000;
+
 async function ensureWorkdayAuthOrApplicationReadyDirect(
   page: AdapterRunContext["page"],
   account: { email: string; password: string },
@@ -1141,7 +1143,17 @@ async function ensureWorkdayAuthOrApplicationReadyDirect(
   // because the tenant does not require an account, or because the user is
   // still signed in from an earlier run in the persistent browser session.
   // Refusing up front meant Automa declined work it could actually do.
-  const preAuthProbe = await probeWorkdayReadyState(page).catch(() => null);
+  let preAuthProbe = await probeWorkdayReadyState(page).catch(() => null);
+  if (preAuthProbe?.state !== "application_step") {
+    // A single probe races the page: the application step frequently is not
+    // rendered yet at this point, and demanding credentials because of that
+    // turns a workable application into a refusal. Give it a short window.
+    preAuthProbe = await waitForWorkdayDirectProbe(
+      page,
+      WORKDAY_PRE_AUTH_APPLICATION_TIMEOUT_MS,
+      (probe) => probe.state === "application_step" || probe.state === "sign_in" || probe.state === "create_account"
+    ).catch(() => preAuthProbe);
+  }
   if (preAuthProbe?.state === "application_step") {
     notes?.push(`workday_auth_skipped:already_on_application_step:step=${preAuthProbe.step}`);
     return { ok: true, accountCreated: false, usedExistingAccount: true, step: preAuthProbe.step };

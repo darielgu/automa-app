@@ -62,6 +62,16 @@ export const GUEST_PERSONA: UserProfileInput = {
       "This is a demonstration profile and does not describe a real person."
   },
   previousEmployers: ["Example Labs", "Demo Systems Inc."],
+  // Workday makes you create an account on the employer's own tenant before it
+  // will show the application. The demo persona carries throwaway credentials
+  // so the bundled Workday practice application can run end to end; they are
+  // fictional and are never sent anywhere real.
+  workday: {
+    account: {
+      email: "alex.rivera@example.com",
+      password: "DemoOnly-NotARealAccount-2026"
+    }
+  },
   logistics: {
     earliestStartDate: "2026-09-01"
   },

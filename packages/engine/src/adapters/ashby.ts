@@ -1369,12 +1369,43 @@ export class AshbyAdapter extends BaseAdapter {
           ...deterministicProfile,
           value: sanitized
         });
-        const applied = await this.fillFieldWithVerification(scope, field, sanitized, {
-          profile: context.profile,
-          postingLocation,
-          ashbyConfig,
-          logger: context.logger
-        });
+        let applied = false;
+        try {
+          applied = await this.fillFieldWithVerification(scope, field, sanitized, {
+            profile: context.profile,
+            postingLocation,
+            ashbyConfig,
+            logger: context.logger
+          });
+        } catch (fillError) {
+          context.logger.warn("ashby_fill_threw", {
+            fieldId: field.id,
+            label: field.label,
+            selector: field.selector,
+            error: fillError instanceof Error ? fillError.message.split("\n")[0] : String(fillError)
+          });
+        }
+        if (!applied) {
+          // The Ashby-specific commit path is tuned for Ashby's real widgets and
+          // reports failure on plain controls it does not recognise. Fall back
+          // to the generic filler — the same one the Greenhouse adapter uses —
+          // before giving up. Verification still runs, so this cannot turn a
+          // genuine failure into a false success.
+          applied = await fillField(scope, field, sanitized as never).catch(() => false);
+          if (applied) {
+            context.logger.info("ashby_fill_generic_fallback", { fieldId: field.id, label: field.label });
+          }
+        }
+        if (!applied) {
+          context.logger.warn("ashby_fill_not_applied", {
+            fieldId: field.id,
+            label: field.label,
+            selector: field.selector,
+            type: field.type,
+            selectorMatches: await scope.locator(field.selector).count().catch(() => -1),
+            value: typeof sanitized === "string" ? sanitized.slice(0, 40) : String(sanitized)
+          });
+        }
         const verified = applied && (await this.verifyFieldAnswered(scope, field, sanitized));
         context.logger.info("ashby_phase_a_execute_result", {
           fieldId: field.id,
@@ -7681,7 +7712,19 @@ export class AshbyAdapter extends BaseAdapter {
       await control.blur().catch(() => undefined);
     }
 
-    const valueAfterCommit = String((await control.inputValue().catch(() => "")) ?? "").trim();
+    let valueAfterCommit = String((await control.inputValue().catch(() => "")) ?? "").trim();
+    if (valueAfterCommit.length > 0) return true;
+
+    // Every strategy above commits by synthesising keystrokes. Those are
+    // delivered to whatever currently has keyboard focus, so in a background or
+    // offscreen browser view — which is exactly how the desktop app runs
+    // automations while you work — they reach nothing and the field stays
+    // empty. Fall back to setting the value directly, which does not depend on
+    // focus. Verification still runs afterwards, so this cannot mask a failure.
+    await control.fill(candidate).catch(() => undefined);
+    await control.press("Tab").catch(() => undefined);
+    await control.blur().catch(() => undefined);
+    valueAfterCommit = String((await control.inputValue().catch(() => "")) ?? "").trim();
     return valueAfterCommit.length > 0;
   }
 

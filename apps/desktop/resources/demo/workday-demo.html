@@ -34,7 +34,13 @@
 
   <!-- data-automation-id attributes mirror Workday's real markup, which is what
        the Workday adapter keys off. -->
+  <!-- Workday identifies which step you are on by page-level markers. Without
+       one, the adapter treats the page as the final review step and fills
+       nothing. This mirrors the real "My Information" step. -->
+  <div data-automation-id="applyFlowPage">
   <div data-automation-id="applyManually">
+   <div data-automation-id="contactInformationPage">
+    <h2>My Information</h2>
     <form id="application-form">
       <div data-automation-id="formField-legalNameSection_firstName">
         <label data-automation-id="formLabel" class="required" for="firstName">First Name</label>
@@ -66,28 +72,6 @@
         <input type="file" id="resume" name="resume" data-automation-id="resume" required />
       </div>
 
-      <div data-automation-id="formField-workAuth">
-        <label data-automation-id="formLabel" class="required" for="workAuth">
-          Are you legally eligible to work in the country to which you are applying?
-        </label>
-        <select id="workAuth" name="workAuth" data-automation-id="workAuth" required>
-          <option value="">Select One</option>
-          <option value="Yes">Yes</option>
-          <option value="No">No</option>
-        </select>
-      </div>
-
-      <div data-automation-id="formField-sponsorship">
-        <label data-automation-id="formLabel" class="required" for="sponsorship">
-          Will you now or in the future require sponsorship for employment visa status?
-        </label>
-        <select id="sponsorship" name="sponsorship" data-automation-id="sponsorship" required>
-          <option value="">Select One</option>
-          <option value="Yes">Yes</option>
-          <option value="No">No</option>
-        </select>
-      </div>
-
       <div data-automation-id="formField-source">
         <label data-automation-id="formLabel" for="source">How Did You Hear About Us?</label>
         <select id="source" name="source" data-automation-id="source">
@@ -99,9 +83,40 @@
       </div>
 
       <div class="error" id="form-error">Please complete every required field.</div>
-      <button type="submit" data-automation-id="pageFooterNextButton">Submit</button>
+      <button type="submit" data-automation-id="pageFooterNextButton">Save and Continue</button>
     </form>
+   </div>
   </div>
+</div>
+
+<div id="questions-step" data-automation-id="applyFlowPrimaryQuestionsPage" style="display:none">
+  <h2>Application Questions</h2>
+  <form id="questions-form">
+    <div data-automation-id="formField-workAuth">
+      <label data-automation-id="formLabel" class="required" for="workAuth">
+        Are you legally eligible to work in the country to which you are applying?
+      </label>
+      <select id="workAuth" name="workAuth" data-automation-id="workAuth" required>
+        <option value="">Select One</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </div>
+
+    <div data-automation-id="formField-sponsorship">
+      <label data-automation-id="formLabel" class="required" for="sponsorship">
+        Will you now or in the future require sponsorship for employment visa status?
+      </label>
+      <select id="sponsorship" name="sponsorship" data-automation-id="sponsorship" required>
+        <option value="">Select One</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </div>
+
+    <div class="error" id="questions-error">Please answer every question.</div>
+    <button type="submit" data-automation-id="pageFooterNextButton">Save and Continue</button>
+  </form>
 </div>
 
 <div id="confirmation" data-automation-id="applicationSubmitted">
@@ -113,7 +128,7 @@
 <script>
   document.getElementById("application-form").addEventListener("submit", function (event) {
     event.preventDefault();
-    var ids = ["firstName", "lastName", "email", "workAuth", "sponsorship"];
+    var ids = ["firstName", "lastName", "email"];
     var missing = ids.filter(function (id) { return !document.getElementById(id).value; });
     var resume = document.getElementById("resume");
     if (missing.length || !resume.files.length) {
@@ -121,9 +136,21 @@
       return;
     }
     document.getElementById("form-view").style.display = "none";
+    document.getElementById("questions-step").style.display = "block";
+  });
+
+  document.getElementById("questions-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var missing = ["workAuth", "sponsorship"].filter(function (id) { return !document.getElementById(id).value; });
+    if (missing.length) {
+      document.getElementById("questions-error").style.display = "block";
+      return;
+    }
+    document.getElementById("questions-step").style.display = "none";
     document.getElementById("confirmation").style.display = "block";
     document.title = "Application submitted | Automa Demo Co";
   });
 </script>
+</div>
 </body>
 </html>

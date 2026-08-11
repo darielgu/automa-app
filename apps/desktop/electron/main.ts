@@ -1626,6 +1626,25 @@ app.whenReady().then(() => {
   createWindow();
   recoverRunsOnStartup();
 
+  // Keep the job feed fresh from the main process rather than letting a screen
+  // trigger it. The renderer used to sync only when the local list came back
+  // empty, so once the practice applications were seeded the list was never
+  // empty and a fresh install never fetched any real jobs.
+  //
+  // syncJobFeed enforces its own polite interval, so calling it on every launch
+  // and hourly costs nothing when the feeds are unchanged.
+  const runFeedSync = (reason: string) => {
+    void syncJobFeed(db())
+      .then((result) => {
+        console.log(`job feed sync (${reason}):`, result.counts.total, "jobs");
+        mainWindow?.webContents.send("jobs:updated", result);
+      })
+      .catch((error) => console.error(`job feed sync failed (${reason})`, error));
+  };
+
+  setTimeout(() => runFeedSync("startup"), 3_000);
+  setInterval(() => runFeedSync("hourly"), 60 * 60 * 1000);
+
   ipcMain.handle("desktop:get-state", () => readState());
 
   // ---- job feed ----------------------------------------------------------

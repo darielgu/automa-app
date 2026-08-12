@@ -1896,6 +1896,20 @@ export class GreenhouseAdapter extends BaseAdapter {
     return match ? `page_text:${match}` : null;
   }
 
+  /** Whether the control now holds the value, allowing for reformatting. */
+  private async controlHoldsValue(
+    locator: ReturnType<AdapterRunContext["page"]["locator"]>,
+    expected: string
+  ): Promise<boolean> {
+    const actual = await locator.inputValue().catch(async () =>
+      locator.evaluate((element) => (element as HTMLSelectElement).value ?? "").catch(() => "")
+    );
+    if (!actual) return false;
+    const a = normalizeText(String(actual)).toLowerCase();
+    const b = normalizeText(expected).toLowerCase();
+    return a === b || a.includes(b) || b.includes(a);
+  }
+
   private async probeLiveSelectOptions(
     page: AdapterRunContext["page"],
     field: FieldDescriptor,
@@ -7780,14 +7794,16 @@ export class GreenhouseAdapter extends BaseAdapter {
       } else {
         await byLabel.fill(value).catch(() => undefined);
       }
-      return true;
+      // Read it back. Claiming success here recorded a field as answered when
+      // fill() had quietly failed on a control the page had disabled.
+      if (await this.controlHoldsValue(byLabel, value)) return true;
     }
 
     for (const selector of selectors) {
       const locator = page.locator(selector).first();
       if (!(await locator.count())) continue;
       await locator.fill(value).catch(() => undefined);
-      return true;
+      if (await this.controlHoldsValue(locator, value)) return true;
     }
 
     return false;

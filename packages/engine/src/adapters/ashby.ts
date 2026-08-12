@@ -9764,6 +9764,36 @@ export class AshbyAdapter extends BaseAdapter {
       .filter(Boolean);
   }
 
+  /**
+   * Whether the application form proper has rendered.
+   *
+   * Counting field entries rather than any visible input, because Ashby paints
+   * a resume-autofill input at the top of the page seconds before the rest of
+   * the form exists. Accepting that one input as "the form is ready" let
+   * extraction start 2.3 seconds in, against a half-built DOM, where it timed
+   * out twice at nine seconds and fell back to zero fields -- on all three live
+   * postings measured. A rendered form carries roughly a dozen of these.
+   */
+  private async hasRenderedApplicationForm(scope: AshbyInteractionScope): Promise<boolean> {
+    return scope
+      .evaluate(() => {
+        // Deliberately not measuring bounding boxes. Runs execute in a
+        // background WebContentsView, where every element reports a zero-sized
+        // rect no matter how rendered it is -- the same trap the practice-app
+        // harness exists to catch. Presence plus a display check is what can
+        // actually be observed from here.
+        const entries = Array.from(
+          document.querySelectorAll("[data-field-path], .ashby-application-form-field-entry")
+        ).filter((node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(node);
+          return style.display !== "none" && style.visibility !== "hidden";
+        });
+        return entries.length >= 3;
+      })
+      .catch(() => false);
+  }
+
   private async hasVisibleApplicationFields(scope: AshbyInteractionScope): Promise<boolean> {
     return scope
       .evaluate(() => {
@@ -9831,12 +9861,15 @@ export class AshbyAdapter extends BaseAdapter {
    */
   private async waitForApplicationFields(page: AdapterRunContext["page"], timeoutMs: number): Promise<boolean> {
     const start = Date.now();
+    // Prefer a fully rendered form. Fall back to the looser check only once the
+    // budget is nearly spent, so a page that genuinely has few fields is not
+    // stuck waiting for a dozen that will never come.
     while (Date.now() - start < timeoutMs) {
-      if (await this.hasVisibleApplicationFields(page)) return true;
-      if (await this.hasVisibleApplicationFieldsInAnyFrame(page)) return true;
+      if (await this.hasRenderedApplicationForm(page)) return true;
       await page.waitForTimeout(250);
     }
-    return false;
+    if (await this.hasVisibleApplicationFields(page)) return true;
+    return this.hasVisibleApplicationFieldsInAnyFrame(page);
   }
 
   private async extractAshbyJobTitle(page: AdapterRunContext["page"]): Promise<string | undefined> {

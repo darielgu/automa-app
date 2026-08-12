@@ -335,7 +335,21 @@ function recordAppliedJob(run: QueueEntry): void {
  * Keep a realistic viewport and move it outside the window instead, so the
  * layout is real but nothing is drawn on screen.
  */
-const HIDDEN_BROWSER_DRAWER_BOUNDS: Rectangle = { x: -20000, y: 0, width: 1440, height: 1200 };
+/**
+ * Where a run's browser lives while nobody is watching it.
+ *
+ * Off-screen rather than hidden, and that distinction is the whole point. A
+ * WebContentsView with setVisible(false) reports a 0x0 viewport: window
+ * .innerWidth is 0, every container measures zero width, and a responsive site
+ * lays out into nothing. Every adapter has been driving real forms in that
+ * viewport. Greenhouse and Lever happen to survive it because their extractors
+ * key off inputs and ids; Ashby's keys off field containers, which measure zero
+ * width, so it found no fields on any live posting.
+ *
+ * x is far enough left that the view cannot intersect the window on any
+ * display, so it stays unseen while Chromium still lays it out at a real size.
+ */
+const HIDDEN_BROWSER_DRAWER_BOUNDS: Rectangle = { x: -1460, y: 0, width: 1440, height: 1200 };
 
 let mainWindow: BrowserWindow | null = null;
 let browserDrawerBounds: Rectangle | null = null;
@@ -701,8 +715,10 @@ function hideAllRunSurfaces(exceptRunId?: string) {
   for (const [runId, surface] of runSurfaces.entries()) {
     if (exceptRunId && runId === exceptRunId) continue;
     try {
-      surface.view.setVisible(false);
+      // Visible, but parked off-screen: hiding it would collapse the viewport
+      // to 0x0 and break layout for the form being filled.
       surface.view.setBounds(HIDDEN_BROWSER_DRAWER_BOUNDS);
+      surface.view.setVisible(true);
     } catch {
       // no-op
     }
@@ -725,8 +741,8 @@ async function createFreshRunSurface(input: { runId: string; permitId: string; s
     }
   });
   view.setBackgroundColor("#ffffff");
-  view.setVisible(false);
   view.setBounds(HIDDEN_BROWSER_DRAWER_BOUNDS);
+  view.setVisible(true);
 
   if (!mainWindow.contentView.children.includes(view)) {
     mainWindow.contentView.addChildView(view);

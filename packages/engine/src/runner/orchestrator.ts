@@ -1,6 +1,35 @@
+/**
+ * Forces a desktop-sized viewport on the page an adapter will drive.
+ *
+ * 1440x1200 rather than something smaller because responsive sites collapse to
+ * their mobile layout below roughly 1024px, and a mobile layout hides fields
+ * behind accordions that the desktop one shows outright.
+ */
+async function applyRunViewport(
+  context: BrowserContext,
+  page: Page | undefined,
+  logger: AppLogger
+): Promise<void> {
+  if (!page || page.isClosed()) return;
+  try {
+    const session = await context.newCDPSession(page);
+    await session.send("Emulation.setDeviceMetricsOverride", {
+      width: 1440,
+      height: 1200,
+      deviceScaleFactor: 1,
+      mobile: false
+    });
+    logger.info("run_viewport_applied", { width: 1440, height: 1200 });
+  } catch (error) {
+    // Not fatal: the adapters still work in a degraded viewport, just less well.
+    logger.warn("run_viewport_failed", { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
+import type { BrowserContext, Page } from "playwright-core";
 import { buildAdapters } from "../adapters/index.js";
 import { AnswerEngine } from "../ai/engine.js";
 import { AppLogger } from "../core/logger.js";
@@ -546,6 +575,18 @@ export async function runAutomation(input: RunInput): Promise<RunOutput> {
     // in two waits. A field that has not appeared in eight seconds is not
     // going to, and every code path here already handles a failed action.
     context.setDefaultTimeout(8000);
+
+    // Give the page a real viewport before any adapter looks at it.
+    //
+    // The run surface is an Electron WebContentsView the user is not watching,
+    // and such a view reports window.innerWidth === 0. Every site then lays out
+    // into nothing: measured on a live Ashby posting, its eighteen field
+    // containers each had a width of zero, which is why the extractor found no
+    // fields on any live posting while passing every fixture. Overriding the
+    // device metrics is independent of whether the view is shown, sized or
+    // parked off-screen, so layout no longer depends on window management.
+    await applyRunViewport(context, cdpAnchorPage, logger);
+
     logger.info("cdp_anchor_ready", { pageCount: context.pages().length });
   } else if (userDataDir) {
     context = await chromium.launchPersistentContext(userDataDir, {

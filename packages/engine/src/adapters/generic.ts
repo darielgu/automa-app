@@ -10,6 +10,36 @@ export class GenericAdapter extends BaseAdapter {
     return url.startsWith("http://") || url.startsWith("https://");
   }
 
+  /**
+   * Waits for a form to exist before deciding there is not one.
+   *
+   * Counts real inputs rather than any element: a careers page carries a search
+   * box and a cookie banner long before the application form renders, and
+   * treating those as "the form is here" is how this adapter used to conclude
+   * a page had nothing on it.
+   */
+  private async waitForAnyFormFields(page: AdapterRunContext["page"], timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const count = await page
+        .evaluate(() =>
+          Array.from(
+            document.querySelectorAll("input, textarea, select")
+          ).filter((node) => {
+            const element = node as HTMLInputElement;
+            const type = (element.getAttribute("type") || "").toLowerCase();
+            if (["hidden", "submit", "button", "search"].includes(type)) return false;
+            const style = window.getComputedStyle(element);
+            return style.display !== "none" && style.visibility !== "hidden";
+          }).length
+        )
+        .catch(() => 0);
+      if (count >= 3) return true;
+      await page.waitForTimeout(300).catch(() => undefined);
+    }
+    return false;
+  }
+
   async apply(context: AdapterRunContext) {
     const { page, target, config } = context;
     const result = this.baseResult(context);
@@ -17,7 +47,13 @@ export class GenericAdapter extends BaseAdapter {
 
     try {
       await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: config.timeoutMs });
-      await page.waitForTimeout(1000);
+
+      // A second was never going to be enough. Most application forms behind a
+      // careers URL are client-rendered: measured on live Workable postings,
+      // the form has 23 inputs once React has run and none before it. Waiting
+      // for fields to exist is the difference between filling a form and
+      // reporting that there was nothing there.
+      await this.waitForAnyFormFields(page, 15000);
 
       const possibleApplyButtons = [
         page.getByRole("button", { name: /apply/i }).first(),
@@ -41,16 +77,70 @@ export class GenericAdapter extends BaseAdapter {
         company: result.company
       });
 
-      const byId = indexAnswersByQuestion(answers);
+      let byId = indexAnswersByQuestion(answers);
+
+      // Second pass for anything the label could not answer.
+      //
+      // Application forms are localised; the input names are not. A live
+      // Workable posting labels its fields "Prenom" and "Nom de famille" while
+      // naming the inputs firstname and lastname, so matching on the visible
+      // label alone missed the applicant's name entirely and filled only the
+      // fields whose labels happened to be English. The name is already carried
+      // in the field id, so ask again using that, and keep the original label
+      // for the receipt so the user still reads what the form actually said.
+      const unanswered = fields.filter((field) => {
+        const existing = byId.get(field.id);
+        return !existing || existing.value === null;
+      });
+      if (unanswered.length) {
+        const byNameQuestions = unanswered.map((field) => ({
+          ...field,
+          label: field.id.replace(/^field_\d+_/, "").replace(/[_-]+/g, " ").trim() || field.label
+        }));
+        const nameAnswers = await context.aiEngine
+          .resolve(byNameQuestions, {
+            profile: context.profile,
+            resumeText: context.resumeText,
+            jobTitle: result.jobTitle,
+            company: result.company
+          })
+          .catch(() => []);
+        const merged = [...answers];
+        for (const answer of nameAnswers) {
+          if (answer.value === null || answer.value === undefined) continue;
+          if (merged.some((existing) => existing.questionId === answer.questionId && existing.value !== null)) continue;
+          merged.push(answer);
+        }
+        answers.length = 0;
+        answers.push(...merged);
+        byId = indexAnswersByQuestion(answers);
+      }
+
       for (const field of fields) {
         const answer = byId.get(field.id);
         if (!answer || answer.value === null) continue;
-        await fillField(page, field, answer.value);
+        const filled = await fillField(page, field, answer.value).catch(() => false);
+        // Without this the adapter filled fields and told nobody: filledFields
+        // stayed empty, so the run's receipt showed no work and every audit of
+        // it read as zero fields regardless of what actually went into the form.
+        if (filled) {
+          result.filledFields.push({
+            id: field.id,
+            label: field.label || field.id,
+            value: String(answer.value),
+            source: answer.source === "llm" ? "llm" : "profile",
+            inputKind: field.type
+          });
+        }
       }
 
       result.answers = answers;
-      result.status = "filled";
-      result.notes.push("Generic adapter is heuristic and requires per-site selector hardening.");
+      result.status = result.filledFields.length ? "filled" : "failed";
+      result.notes.push(`generic_fields_detected:${fields.length}`);
+      result.notes.push(`generic_fields_filled:${result.filledFields.length}`);
+      if (!result.filledFields.length) {
+        result.notes.push("No application fields were found on this page.");
+      }
 
       if (config.mode === "auto-submit") {
         const submit = page.locator("button[type='submit']").first();

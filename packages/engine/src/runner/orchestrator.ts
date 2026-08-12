@@ -383,13 +383,25 @@ async function detectEmbeddedGreenhouseOnPage(
       .some((button) => /autofill with mygreenhouse/.test(normalize(button.textContent || "")));
     if (hasMyGreenhouseButton) return true;
 
+    // Only markers that mean Greenhouse specifically.
+    //
+    // This used to accept any page containing an element with id "email", or
+    // "first_name", or "last_name". Those ids belong to half the forms on the
+    // internet, so a Workable application -- which has exactly those fields --
+    // was handed to the Greenhouse adapter, which then failed to find a
+    // Greenhouse form and reported the posting as unfillable. Every listing in
+    // the generic bucket was being routed this way.
     const hasGreenhouseApplicationForm =
       Boolean(document.querySelector("form#application-form.application--form")) ||
       Boolean(document.querySelector(".application--container .application--header")) ||
       Boolean(document.querySelector('form[action*="/embed/job_app"]')) ||
-      Boolean(document.querySelector("#first_name")) ||
-      Boolean(document.querySelector("#last_name")) ||
-      Boolean(document.querySelector("#email"));
+      Boolean(document.querySelector('script[src*="greenhouse.io"], link[href*="greenhouse.io"]')) ||
+      // The classic trio, but only together and only alongside a Greenhouse
+      // hint, since all three appear on plenty of unrelated forms.
+      (Boolean(document.querySelector("#first_name")) &&
+        Boolean(document.querySelector("#last_name")) &&
+        Boolean(document.querySelector("#email")) &&
+        /greenhouse/i.test(document.documentElement.innerHTML.slice(0, 200000)));
     if (hasGreenhouseApplicationForm) return true;
 
     const hasGreenhouseFrame = Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe"))
@@ -399,8 +411,10 @@ async function detectEmbeddedGreenhouseOnPage(
       });
     if (hasGreenhouseFrame) return true;
 
+    // "Apply for this job" is on nearly every careers page ever written and
+    // says nothing about which system is behind it.
     const inlineText = normalize((document.body?.innerText || "").slice(0, 20000));
-    return /autofill with mygreenhouse|apply for this job/.test(inlineText);
+    return /autofill with mygreenhouse/.test(inlineText);
   }).catch(() => false);
 
   if (await hasEmbeddedMarker()) return true;

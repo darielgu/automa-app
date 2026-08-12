@@ -23,6 +23,21 @@ import os from "node:os";
 import path from "node:path";
 
 const PLATFORMS = ["greenhouse", "lever", "ashby", "workday"];
+
+/**
+ * Platforms whose application flow creates an account on the employer's own
+ * system before a form is reachable.
+ *
+ * Workday postings sit behind a per-tenant candidate account, and the adapter
+ * genuinely creates one: it fills a password and clicks
+ * createAccountSubmitButton. Auditing it against live postings would leave real
+ * records in real companies' recruiting systems, under a fictional persona,
+ * with no intention of applying. Filling a form and walking away costs an
+ * employer nothing; registering a fake candidate does not.
+ *
+ * Set AUDIT_ALLOW_ACCOUNT_CREATION=1 only against a tenant you own.
+ */
+const CREATES_EMPLOYER_ACCOUNTS = new Set(["workday"]);
 const platformArg = (process.argv[2] || "all").toLowerCase();
 const perPlatform = Number.parseInt(process.argv[3] || "5", 10);
 const targets = platformArg === "all" ? PLATFORMS : [platformArg];
@@ -80,6 +95,11 @@ const results = [];
 
 for (const platform of targets) {
   process.stdout.write(`\n=== ${platform} ===\n`);
+  if (CREATES_EMPLOYER_ACCOUNTS.has(platform) && process.env.AUDIT_ALLOW_ACCOUNT_CREATION !== "1") {
+    console.log("  skipped: applying here creates a candidate account on the employer's own system.");
+    console.log("  Set AUDIT_ALLOW_ACCOUNT_CREATION=1 to override, and only against a tenant you own.");
+    continue;
+  }
   // The feed re-sorts as new listings arrive, so "the newest five" is a
   // different five an hour later. AUDIT_PIN=<file> freezes the sample, which is
   // the only way a before-and-after number means anything.
@@ -138,7 +158,7 @@ for (const platform of targets) {
     const verdict = run ? classify(run) : { resolved: false, reason: "timeout", fields: 0 };
     results.push({ platform, job, verdict, run });
     console.log(
-      `  ${verdict.resolved ? "PASS" : "FAIL"}  ${String(verdict.fields).padStart(2)} fields  ` +
+      `  ${verdict.inactive ? "CLOSED" : verdict.resolved ? "PASS" : "FAIL"}  ${String(verdict.fields).padStart(2)} fields  ` +
         `${String(verdict.reason).padEnd(26)} ${Math.round((Date.now() - before) / 1000)}s  ${job.company} — ${job.title}`.slice(0, 150)
     );
   }

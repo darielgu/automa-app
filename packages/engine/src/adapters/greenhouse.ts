@@ -4233,11 +4233,25 @@ export class GreenhouseAdapter extends BaseAdapter {
                 normalizedAnswer = matchedFromProbe;
               }
             }
-            applied = await this.selectReactOptionByIdPrefix(page, field.id, normalizedAnswer).catch(() => false);
+            // When the probe succeeded we already know the exact option text and
+            // the listbox holding it, so commit against that first. It used to
+            // run third, behind two strategies that guess -- and since a failed
+            // strategy costs a full timeout each, the guessing was measured at
+            // roughly forty seconds per combobox on a live form.
+            if (probed?.options?.length && matchedFromProbe) {
+              const committed = await this.commitReactSelectOption(page, field.id, normalizedAnswer, probed.listboxId || undefined).catch(() => null);
+              if (committed?.applied) {
+                applied = true;
+                normalizedAnswer = committed.matchedOption || normalizedAnswer;
+              }
+            }
+            if (!applied) {
+              applied = await this.selectReactOptionByIdPrefix(page, field.id, normalizedAnswer).catch(() => false);
+            }
             if (!applied) {
               applied = await this.selectReactOption(page, field.id, normalizedAnswer).catch(() => false);
             }
-            if (!applied && probed?.options?.length) {
+            if (!applied && probed?.options?.length && !matchedFromProbe) {
               const committed = await this.commitReactSelectOption(page, field.id, normalizedAnswer, probed.listboxId || undefined).catch(() => null);
               if (committed?.applied) {
                 applied = true;

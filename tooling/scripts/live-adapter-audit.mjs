@@ -73,13 +73,31 @@ const results = [];
 
 for (const platform of targets) {
   process.stdout.write(`\n=== ${platform} ===\n`);
-  const jobs = await page.evaluate(
-    async ({ platform, limit }) => {
-      const page = await window.automaDesktop.listJobs({ platforms: [platform], limit, automatableOnly: false });
-      return page.jobs.map((j) => ({ id: j.simplifyId, url: j.url, title: j.title, company: j.company }));
-    },
-    { platform, limit: perPlatform }
-  );
+  // The feed re-sorts as new listings arrive, so "the newest five" is a
+  // different five an hour later. AUDIT_PIN=<file> freezes the sample, which is
+  // the only way a before-and-after number means anything.
+  const pinPath = process.env.AUDIT_PIN;
+  const pinned = pinPath && fs.existsSync(pinPath) ? JSON.parse(fs.readFileSync(pinPath, "utf8")) : null;
+
+  let jobs;
+  if (pinned?.[platform]?.length) {
+    jobs = pinned[platform].slice(0, perPlatform);
+    console.log(`  (pinned sample of ${jobs.length})`);
+  } else {
+    jobs = await page.evaluate(
+      async ({ platform, limit }) => {
+        const page = await window.automaDesktop.listJobs({ platforms: [platform], limit, automatableOnly: false });
+        return page.jobs.map((j) => ({ id: j.simplifyId, url: j.url, title: j.title, company: j.company }));
+      },
+      { platform, limit: perPlatform }
+    );
+    if (pinPath) {
+      const store = pinned ?? {};
+      store[platform] = jobs;
+      fs.writeFileSync(pinPath, JSON.stringify(store, null, 2));
+      console.log(`  (pinned ${jobs.length} for future runs)`);
+    }
+  }
 
   if (!jobs.length) {
     console.log("  no live listings for this platform");

@@ -1,0 +1,425 @@
+[
+  {
+    "platform": "greenhouse",
+    "job": {
+      "id": "0eb68fc3-5ce8-4412-ad8c-668694d9782d",
+      "url": "https://www.redventures.com/careers/positions/open?gh_jid=8092530",
+      "title": "Associate Product Manager - AI",
+      "company": "Red Ventures"
+    },
+    "verdict": {
+      "resolved": false,
+      "reason": "still_running_after_wait",
+      "fields": 0
+    },
+    "run": {
+      "id": "7aa2905e-2227-4fbf-9fe8-3d220db8edd4",
+      "jobId": "0eb68fc3-5ce8-4412-ad8c-668694d9782d",
+      "status": "running",
+      "phase": "filling",
+      "submitted": false,
+      "submissionConfirmed": false,
+      "sourceUrl": "https://www.redventures.com/careers/positions/open?gh_jid=8092530",
+      "jobTitle": "Associate Product Manager - AI",
+      "company": "Red Ventures",
+      "source": "live-audit",
+      "createdAt": "2026-08-11T23:46:46.635Z",
+      "notes": [
+        "permit_acquired:9f6fbff8-b59d-4cda-a1ad-b8554567af52"
+      ],
+      "startedAt": "2026-08-11T23:46:46.638Z",
+      "workerId": "slot-1",
+      "browserVisible": false,
+      "provider": "greenhouse"
+    }
+  },
+  {
+    "platform": "greenhouse",
+    "job": {
+      "id": "c0bc8e2c-204a-461b-bd1b-7d720fbcbd77",
+      "url": "https://www.quantbot.com/careers/4341038009?gh_jid=4341038009",
+      "title": "Quantitative Developer Intern",
+      "company": "Quantbot Technologies"
+    },
+    "verdict": {
+      "resolved": true,
+      "reason": "not_submitted",
+      "fields": 17
+    },
+    "run": {
+      "id": "ae00060f-84d5-4cfc-b6cd-7de95343d265",
+      "jobId": "c0bc8e2c-204a-461b-bd1b-7d720fbcbd77",
+      "status": "completed",
+      "phase": "finalizing",
+      "submitted": false,
+      "submissionConfirmed": false,
+      "sourceUrl": "https://www.quantbot.com/careers/4341038009?gh_jid=4341038009",
+      "jobTitle": "Quantitative Developer Intern",
+      "company": "Quantbot Technologies",
+      "source": "live-audit",
+      "createdAt": "2026-08-11T23:58:47.533Z",
+      "notes": [
+        "greenhouse_stage:navigate",
+        "greenhouse_stage:open_form",
+        "greenhouse_stage:seed_fields",
+        "greenhouse_stage:extract_context",
+        "greenhouse_stage:pass_1_scan",
+        "greenhouse_stage:pass_2_scan",
+        "greenhouse_stage:reconcile_required",
+        "Dry run enabled, submit skipped."
+      ],
+      "startedAt": "2026-08-11T23:58:47.544Z",
+      "workerId": "slot-2",
+      "browserVisible": false,
+      "provider": "greenhouse",
+      "submitOutcome": "not_submitted",
+      "answers": [
+        {
+          "questionId": "candidate-location",
+          "value": "San Francisco, California, United States",
+          "source": "profile",
+          "reason": "deterministic_location_city_state_country"
+        },
+        {
+          "questionId": "question_6921670009",
+          "value": "2026",
+          "source": "profile",
+          "reason": "education_end_year"
+        },
+        {
+          "questionId": "question_6921671009",
+          "value": "Yes",
+          "source": "rule",
+          "reason": "work_authorization"
+        },
+        {
+          "questionId": "question_6921672009",
+          "value": "LinkedIn",
+          "source": "rule",
+          "reason": "linkedin"
+        }
+      ],
+      "filledFields": [
+        {
+          "id": "resume",
+          "label": "Resume",
+          "value": "practice-resume.pdf",
+          "source": "seeded",
+          "inputKind": "file"
+        },
+        {
+          "id": "first_name",
+          "label": "First Name",
+          "value": "Alex",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "preferred_name",
+          "label": "Preferred Name",
+          "value": "Alex",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "last_name",
+          "label": "Last Name",
+          "value": "Rivera",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "email",
+          "label": "Email",
+          "value": "alex.rivera@example.com",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "phone",
+          "label": "Phone",
+          "value": "619-289-5672",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "country",
+          "label": "Country",
+          "value": "United States",
+          "source": "seeded",
+          "inputKind": "select"
+        },
+        {
+          "id": "linkedin",
+          "label": "LinkedIn",
+          "value": "https://linkedin.com/in/alex-rivera",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "portfolio",
+          "label": "Portfolio/Website",
+          "value": "https://alexrivera.example.com",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "field_7b9f5f",
+          "label": "Question 8",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_7bb90d",
+          "label": "Question 13",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_d72cea",
+          "label": "Question 15",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_7d92a0",
+          "label": "Question 17",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "candidate-location",
+          "label": "Location (City)",
+          "value": "San Francisco, California, United States",
+          "source": "profile",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "question_6921670009",
+          "label": "When is your expected graduation year? ",
+          "value": "2026",
+          "source": "profile",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "question_6921671009",
+          "label": "Will you now or in the future require work authorization to work in the U.S.?",
+          "value": "Yes",
+          "source": "rule",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "question_6921672009",
+          "label": "How did you hear about Quantbot?",
+          "value": "LinkedIn",
+          "source": "rule",
+          "inputKind": "combobox"
+        }
+      ],
+      "screenshotPaths": [
+        "/Users/darielgutierrez/Library/Application Support/Automa/automation-output/runs/ae00060f-84d5-4cfc-b6cd-7de95343d265/screenshots/greenhouse-filled-1786492804737.png"
+      ],
+      "finishedAt": "2026-08-12T00:00:34.976Z"
+    }
+  },
+  {
+    "platform": "greenhouse",
+    "job": {
+      "id": "d7cb67a6-930f-4fc0-a3b7-3f7d47bcdb31",
+      "url": "https://www.quantbot.com/careers/4340833009?gh_jid=4340833009",
+      "title": "Machine Learning Research Engineer Intern",
+      "company": "Quantbot Technologies"
+    },
+    "verdict": {
+      "resolved": true,
+      "reason": "not_submitted",
+      "fields": 18
+    },
+    "run": {
+      "id": "7cb19eec-511e-4d1e-b8f5-d55a7759c673",
+      "jobId": "d7cb67a6-930f-4fc0-a3b7-3f7d47bcdb31",
+      "status": "completed",
+      "phase": "finalizing",
+      "submitted": false,
+      "submissionConfirmed": false,
+      "sourceUrl": "https://www.quantbot.com/careers/4340833009?gh_jid=4340833009",
+      "jobTitle": "Machine Learning Research Engineer Intern",
+      "company": "Quantbot Technologies",
+      "source": "live-audit",
+      "createdAt": "2026-08-12T00:00:35.877Z",
+      "notes": [
+        "greenhouse_stage:navigate",
+        "greenhouse_stage:open_form",
+        "greenhouse_stage:seed_fields",
+        "greenhouse_stage:extract_context",
+        "greenhouse_stage:pass_1_scan",
+        "greenhouse_stage:pass_2_scan",
+        "greenhouse_stage:pass_3_scan",
+        "greenhouse_stage:reconcile_required",
+        "Dry run enabled, submit skipped."
+      ],
+      "startedAt": "2026-08-12T00:00:35.878Z",
+      "workerId": "slot-2",
+      "browserVisible": false,
+      "provider": "greenhouse",
+      "submitOutcome": "not_submitted",
+      "answers": [
+        {
+          "questionId": "candidate-location",
+          "value": "San Francisco, California, United States",
+          "source": "profile",
+          "reason": "deterministic_location_city_state_country"
+        },
+        {
+          "questionId": "question_6920124009",
+          "value": "Yes",
+          "source": "rule",
+          "reason": "work_authorization"
+        },
+        {
+          "questionId": "question_6920125009",
+          "value": "LinkedIn",
+          "source": "rule",
+          "reason": "linkedin"
+        }
+      ],
+      "filledFields": [
+        {
+          "id": "resume",
+          "label": "Resume",
+          "value": "practice-resume.pdf",
+          "source": "seeded",
+          "inputKind": "file"
+        },
+        {
+          "id": "first_name",
+          "label": "First Name",
+          "value": "Alex",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "preferred_name",
+          "label": "Preferred Name",
+          "value": "Alex",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "last_name",
+          "label": "Last Name",
+          "value": "Rivera",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "email",
+          "label": "Email",
+          "value": "alex.rivera@example.com",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "phone",
+          "label": "Phone",
+          "value": "619-289-5672",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "country",
+          "label": "Country",
+          "value": "United States",
+          "source": "seeded",
+          "inputKind": "select"
+        },
+        {
+          "id": "linkedin",
+          "label": "LinkedIn",
+          "value": "https://linkedin.com/in/alex-rivera",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "portfolio",
+          "label": "Portfolio/Website",
+          "value": "https://alexrivera.example.com",
+          "source": "seeded",
+          "inputKind": "text"
+        },
+        {
+          "id": "field_98b0b7",
+          "label": "Question 8",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_1cb94d",
+          "label": "Question 13",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_1a864d",
+          "label": "Question 15",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_1d56b8",
+          "label": "Question 17",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "candidate-location",
+          "label": "Location (City)",
+          "value": "San Francisco, California, United States",
+          "source": "profile",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "question_6920124009",
+          "label": "Will you now or in the future require work authorization to work in the U.S.?",
+          "value": "Yes",
+          "source": "rule",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "question_6920125009",
+          "label": "How did you hear about Quantbot?",
+          "value": "LinkedIn",
+          "source": "rule",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_49d856",
+          "label": "Question 12",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        },
+        {
+          "id": "field_3ab66a",
+          "label": "Question 12",
+          "value": "+1",
+          "source": "manual",
+          "inputKind": "combobox"
+        }
+      ],
+      "screenshotPaths": [
+        "/Users/darielgutierrez/Library/Application Support/Automa/automation-output/runs/7cb19eec-511e-4d1e-b8f5-d55a7759c673/screenshots/greenhouse-filled-1786492901700.png",
+        "/Users/darielgutierrez/Library/Application Support/Automa/automation-output/runs/7cb19eec-511e-4d1e-b8f5-d55a7759c673/screenshots/greenhouse-final-1786492902143.png"
+      ],
+      "finishedAt": "2026-08-12T00:01:45.149Z"
+    }
+  }
+]

@@ -539,6 +539,13 @@ export async function runAutomation(input: RunInput): Promise<RunOutput> {
       await cdpAnchorPage.goto("about:blank").catch(() => undefined);
       await closeStaleCdpPages(context, cdpAnchorPage, logger);
     }
+    // Playwright waits 30 seconds by default for an element to become
+    // actionable. On a real application form that is the difference between an
+    // adapter noticing a dead end and an application taking a quarter of an
+    // hour: one hidden checkbox on a live Greenhouse posting cost 120 seconds
+    // in two waits. A field that has not appeared in eight seconds is not
+    // going to, and every code path here already handles a failed action.
+    context.setDefaultTimeout(8000);
     logger.info("cdp_anchor_ready", { pageCount: context.pages().length });
   } else if (userDataDir) {
     context = await chromium.launchPersistentContext(userDataDir, {

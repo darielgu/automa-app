@@ -125,9 +125,16 @@ for (const platform of targets) {
   const pinPath = process.env.AUDIT_PIN;
   const pinned = pinPath && fs.existsSync(pinPath) ? JSON.parse(fs.readFileSync(pinPath, "utf8")) : null;
 
+  // Automa's own practice fixtures are seeded into the corpus under
+  // AUTOMA_DEV_PRACTICE and look like ordinary Greenhouse, Lever and Ashby
+  // listings. One reached a sample built from the database and passed, which
+  // proves only that the adapter can fill markup we wrote ourselves -- the
+  // exact thing this harness exists to stop counting.
+  const isPractice = (job) => /practice|automa-practice|^file:/i.test(`${job.url} ${job.company ?? ""}`);
+
   let jobs;
   if (pinned?.[platform]?.length) {
-    jobs = pinned[platform].slice(0, perPlatform);
+    jobs = pinned[platform].filter((job) => !isPractice(job)).slice(0, perPlatform);
     console.log(`  (pinned sample of ${jobs.length})`);
   } else {
     jobs = await page.evaluate(
@@ -137,6 +144,7 @@ for (const platform of targets) {
       },
       { platform, limit: perPlatform }
     );
+    jobs = jobs.filter((job) => !isPractice(job));
     if (pinPath) {
       const store = pinned ?? {};
       store[platform] = jobs;

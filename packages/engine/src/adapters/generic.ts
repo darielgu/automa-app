@@ -53,7 +53,12 @@ export class GenericAdapter extends BaseAdapter {
       // the form has 23 inputs once React has run and none before it. Waiting
       // for fields to exist is the difference between filling a form and
       // reporting that there was nothing there.
+      const started = Date.now();
+      const mark = (phase: string, extra: Record<string, unknown> = {}) =>
+        context.logger.info("generic_phase", { phase, elapsedMs: Date.now() - started, ...extra });
+
       await this.waitForAnyFormFields(page, 15000);
+      mark("form_ready");
 
       const possibleApplyButtons = [
         page.getByRole("button", { name: /apply/i }).first(),
@@ -69,6 +74,7 @@ export class GenericAdapter extends BaseAdapter {
       }
 
       const fields = await extractVisibleFields(page);
+      mark("fields_extracted", { fieldCount: fields.length });
       const questions = buildQuestionMap(fields);
       const answers = await context.aiEngine.resolve(questions, {
         profile: context.profile,
@@ -77,6 +83,7 @@ export class GenericAdapter extends BaseAdapter {
         company: result.company
       });
 
+      mark("answers_resolved", { answerCount: answers.length });
       let byId = indexAnswersByQuestion(answers);
 
       // Second pass for anything the label could not answer.
@@ -116,10 +123,19 @@ export class GenericAdapter extends BaseAdapter {
         byId = indexAnswersByQuestion(answers);
       }
 
+      mark("second_pass_done");
       for (const field of fields) {
         const answer = byId.get(field.id);
         if (!answer || answer.value === null) continue;
+        const fieldStarted = Date.now();
         const filled = await fillField(page, field, answer.value).catch(() => false);
+        // Per-field timing, because the whole adapter used to be one silent
+        // twelve-minute gap between job_start and job_done.
+        context.logger.info("generic_field_filled", {
+          id: field.id,
+          ms: Date.now() - fieldStarted,
+          filled
+        });
         // Without this the adapter filled fields and told nobody: filledFields
         // stayed empty, so the run's receipt showed no work and every audit of
         // it read as zero fields regardless of what actually went into the form.
@@ -136,6 +152,7 @@ export class GenericAdapter extends BaseAdapter {
 
       result.answers = answers;
       result.status = result.filledFields.length ? "filled" : "failed";
+      mark("fill_done", { filled: result.filledFields.length });
       result.notes.push(`generic_fields_detected:${fields.length}`);
       result.notes.push(`generic_fields_filled:${result.filledFields.length}`);
       if (!result.filledFields.length) {

@@ -2455,7 +2455,7 @@ export class AshbyAdapter extends BaseAdapter {
   }
 
   private async enterApplyFlow(page: AdapterRunContext["page"]): Promise<void> {
-    if ((await this.hasVisibleApplicationFields(page)) || (await this.hasVisibleApplicationFieldsInAnyFrame(page))) return;
+    if (await this.waitForApplicationFields(page, 15000)) return;
 
     const candidates = [
       page.getByRole("button", { name: /apply|start application|apply now/i }).first(),
@@ -9819,13 +9819,24 @@ export class AshbyAdapter extends BaseAdapter {
     return page;
   }
 
-  private async waitForApplicationFields(page: AdapterRunContext["page"], timeoutMs: number): Promise<void> {
+  /**
+   * Waits for the application fields to exist, and says whether they did.
+   *
+   * An Ashby posting is a client-rendered app: the served HTML says "You need
+   * to enable JavaScript to run this app" and contains no inputs at all. This
+   * helper existed and was used when navigating to the application URL, but
+   * enterApplyFlow asked once, instantaneously, before doing anything -- a race
+   * against React that it lost on all three live postings measured, finishing
+   * each application in 28 seconds having found zero fields and filled nothing.
+   */
+  private async waitForApplicationFields(page: AdapterRunContext["page"], timeoutMs: number): Promise<boolean> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      if (await this.hasVisibleApplicationFields(page)) return;
-      if (await this.hasVisibleApplicationFieldsInAnyFrame(page)) return;
+      if (await this.hasVisibleApplicationFields(page)) return true;
+      if (await this.hasVisibleApplicationFieldsInAnyFrame(page)) return true;
       await page.waitForTimeout(250);
     }
+    return false;
   }
 
   private async extractAshbyJobTitle(page: AdapterRunContext["page"]): Promise<string | undefined> {

@@ -934,11 +934,20 @@ export class LeverAdapter extends BaseAdapter {
   }
 
   private fail(result: JobRunResult, reason: string): JobRunResult {
-    result.status = "failed";
     result.submissionConfirmed = false;
     result.submitted = false;
-    result.error = reason;
     result.notes.unshift(reason);
+
+    // Refusing to submit an application with a required question still
+    // unanswered is the adapter working, not breaking. Recording it as "failed"
+    // put a correct, careful run in the same bucket as a crash, hid the fact
+    // that it had filled eighteen fields, and told the user Automa could not
+    // handle a form it had very nearly finished. What is left is the part a
+    // person has to answer, which is what the run should say.
+    const blockedButFilled =
+      reason.startsWith("blocked_pre_submit_") && result.filledFields.length > 0;
+    result.status = blockedButFilled ? "filled" : "failed";
+    if (!blockedButFilled) result.error = reason;
     if (reason.startsWith("captcha_or_bot_challenge:")) result.submitOutcome = "blocked_bot_challenge";
     else if (reason.startsWith("blocked_pre_submit_unresolved_required:")) result.submitOutcome = "blocked_pre_submit_unresolved_required";
     else if (reason.startsWith("blocked_pre_submit_location_token_missing:")) result.submitOutcome = "blocked_pre_submit_unresolved_required";

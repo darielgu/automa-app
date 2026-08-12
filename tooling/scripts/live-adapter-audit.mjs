@@ -66,7 +66,7 @@ if (!page) {
 }
 
 /** A run is resolved when the adapter reached the form and filled real fields. */
-const TERMINAL = ["completed", "failed", "cancelled", "skipped"];
+const TERMINAL = ["completed", "filled", "applied", "failed", "cancelled", "skipped"];
 
 function classify(run) {
   // Values the form arrived with are not work this tool did. Counting them

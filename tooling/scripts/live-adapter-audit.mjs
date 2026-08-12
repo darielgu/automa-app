@@ -114,6 +114,14 @@ function classify(run) {
   };
 }
 
+// Real sites open dialogs -- cookie confirmations, beforeunload prompts. The
+// CDP client auto-dismisses them, and if the page closes mid-dismiss it raises
+// an unhandled rejection that took the whole audit down after one posting. A
+// dialog on someone else's site is not a reason to abandon the measurement.
+process.on("unhandledRejection", (reason) => {
+  console.log(`  (ignored background error: ${String(reason).slice(0, 90)})`);
+});
+
 const results = [];
 
 for (const platform of targets) {

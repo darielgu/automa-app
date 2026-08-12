@@ -22,7 +22,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const PLATFORMS = ["greenhouse", "lever", "ashby", "workday"];
+// "generic" is the catch-all adapter, and it carries 1,807 active listings --
+// 41% of the corpus, more than every named platform combined. It is included
+// because the largest untested surface in the product is the one most likely to
+// be quietly failing.
+const PLATFORMS = ["greenhouse", "lever", "ashby", "generic", "workday"];
 
 /**
  * Platforms whose application flow creates an account on the employer's own

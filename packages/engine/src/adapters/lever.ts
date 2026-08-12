@@ -2340,6 +2340,10 @@ export class LeverAdapter extends BaseAdapter {
         ".dropdown-results [role='option'], .dropdown-results li, .dropdown-results button, .dropdown-results .dropdown-result-item, .dropdown-results > div"
       );
 
+      // Kept at three seconds. Raising it to eight was tried against the same
+      // seven live postings and changed nothing: the two that fail produce no
+      // suggestions at all rather than slow ones, so the extra wait bought
+      // 45 seconds per run and no successes.
       const started = Date.now();
       while (Date.now() - started < 3000) {
         const count = await dropdownOptions.count().catch(() => 0);

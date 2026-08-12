@@ -203,6 +203,17 @@ async function locateByCandidates(scope: FillScope, field: DetectedField): Promi
   return scope.locator(field.selector).first();
 }
 
+/**
+ * How long to wait for a label that either exists in the DOM or does not.
+ *
+ * Every lookup below is a "is there a label attached to this control" question,
+ * and the answer is already in the page. Left on the default action timeout,
+ * each miss cost eight seconds: five lookups across nineteen fields put field
+ * extraction on a live Workable posting at 545 seconds, which was 99% of a
+ * nine-minute run. Nothing here is waiting for the page to change.
+ */
+const LABEL_LOOKUP_TIMEOUT_MS = 500;
+
 async function getLabelText(scope: FillScope, control: Locator, id: string, fallback: string): Promise<string> {
   const ashbyQuestionTitle = normalizeText(
     (await control
@@ -210,23 +221,33 @@ async function getLabelText(scope: FillScope, control: Locator, id: string, fall
         "xpath=ancestor::*[@data-field-path][1]//*[contains(@class,'ashby-application-form-question-title')][1]"
       )
       .first()
-      .textContent()
+      .textContent({ timeout: LABEL_LOOKUP_TIMEOUT_MS })
       .catch(() => "")) ?? ""
   );
   if (ashbyQuestionTitle) return ashbyQuestionTitle;
 
   if (id) {
-    const forLabel = normalizeText((await findLabelLocatorByFor(scope, id).textContent().catch(() => "")) ?? "");
+    const forLabel = normalizeText(
+      (await findLabelLocatorByFor(scope, id).textContent({ timeout: LABEL_LOOKUP_TIMEOUT_MS }).catch(() => "")) ?? ""
+    );
     if (forLabel) return forLabel;
   }
 
-  const ancestorLabel = normalizeText((await control.locator("xpath=ancestor::label[1]").first().textContent().catch(() => "")) ?? "");
+  const ancestorLabel = normalizeText(
+    (await control
+      .locator("xpath=ancestor::label[1]")
+      .first()
+      .textContent({ timeout: LABEL_LOOKUP_TIMEOUT_MS })
+      .catch(() => "")) ?? ""
+  );
   if (ancestorLabel) return ancestorLabel;
 
-  const ariaLabel = normalizeText((await control.getAttribute("aria-label")) ?? "");
+  const ariaLabel = normalizeText((await control.getAttribute("aria-label", { timeout: LABEL_LOOKUP_TIMEOUT_MS }).catch(() => "")) ?? "");
   if (ariaLabel) return ariaLabel;
 
-  const labelledBy = normalizeText((await control.getAttribute("aria-labelledby")) ?? "");
+  const labelledBy = normalizeText(
+    (await control.getAttribute("aria-labelledby", { timeout: LABEL_LOOKUP_TIMEOUT_MS }).catch(() => "")) ?? ""
+  );
   if (labelledBy) {
     const parts = labelledBy
       .split(/\s+/)

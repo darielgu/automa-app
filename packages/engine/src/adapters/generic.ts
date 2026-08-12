@@ -44,9 +44,40 @@ export class GenericAdapter extends BaseAdapter {
     const { page, target, config } = context;
     const result = this.baseResult(context);
     result.startedAt = new Date().toISOString();
+    // Proof of entry. On live Workable postings the orchestrator logs job_start
+    // and run_complete with no job_done and no adapter events in between, which
+    // means either this method is never entered or it leaves before its first
+    // mark. This line tells those two apart, and costs nothing.
+    context.logger.info("generic_apply_entered", { url: target.url });
 
     try {
-      await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: config.timeoutMs });
+      // Navigation failures here were silent: the adapter was entered, threw,
+      // and the run surfaced as "failed" with no error and no notes. Live
+      // Workable postings die at exactly this line -- reachable by plain fetch,
+      // so the cause is something the surface does rather than the site being
+      // down. Recording it is the difference between a mystery and a lead.
+      // Skip the navigation when we are already there.
+      //
+      // Only generic postings pass through detectEmbeddedGreenhouseOnPage,
+      // which navigates to this exact URL before choosing an adapter. Going
+      // there again made Chromium abort the duplicate navigation with
+      // net::ERR_ABORTED, which threw before the adapter did any work -- and
+      // silently, so 1,807 listings looked unfillable for a reason that had
+      // nothing to do with their forms. Greenhouse, Lever and Ashby never hit
+      // this because nothing pre-navigates for them.
+      const alreadyThere = page.url().split("#")[0] === target.url.split("#")[0];
+      try {
+        if (alreadyThere) {
+          context.logger.info("generic_navigation_skipped", { url: target.url });
+        } else {
+          await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: config.timeoutMs });
+        }
+      } catch (navError) {
+        const message = navError instanceof Error ? navError.message : String(navError);
+        context.logger.warn("generic_navigation_failed", { url: target.url, error: message });
+        result.notes.push(`generic_navigation_failed:${message.slice(0, 160)}`);
+        throw navError;
+      }
 
       // A second was never going to be enough. Most application forms behind a
       // careers URL are client-rendered: measured on live Workable postings,
@@ -65,10 +96,20 @@ export class GenericAdapter extends BaseAdapter {
         page.getByRole("link", { name: /apply/i }).first()
       ];
 
+      // An unbounded click on a speculative match. If a page has something
+      // matching /apply/i that is not clickable -- a heading, a covered link, a
+      // disabled control -- this threw, and the whole adapter left before doing
+      // any work. Instrumentation put the failure exactly here: the adapter is
+      // entered and never reaches its first mark.
       for (const button of possibleApplyButtons) {
-        if (await button.count()) {
-          await button.click();
-          await page.waitForTimeout(500);
+        if (!(await button.count().catch(() => 0))) continue;
+        const clicked = await button
+          .click({ timeout: 4000 })
+          .then(() => true)
+          .catch(() => false);
+        context.logger.info("generic_apply_button", { clicked });
+        if (clicked) {
+          await page.waitForTimeout(500).catch(() => undefined);
           break;
         }
       }
@@ -168,9 +209,15 @@ export class GenericAdapter extends BaseAdapter {
         }
       }
 
+      // A screenshot is evidence, not the job. Taking a full-page capture of a
+      // long application can exceed the action timeout, and letting that throw
+      // marked a run that had filled the form as failed.
       const screenshotPath = path.join(config.screenshotsDir, `generic-${Date.now()}.png`);
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-      result.screenshotPaths.push(screenshotPath);
+      const captured = await page
+        .screenshot({ path: screenshotPath, fullPage: true })
+        .then(() => true)
+        .catch(() => false);
+      if (captured) result.screenshotPaths.push(screenshotPath);
     } catch (error) {
       result.status = "failed";
       result.error = error instanceof Error ? error.message : String(error);

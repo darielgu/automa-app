@@ -81,19 +81,33 @@ function classify(run) {
     return { resolved: false, reason: `still_${run.status}_after_wait`, fields: fields.length };
   }
   const identity = fields.filter((f) => /first|last|name|email|phone/i.test(`${f.label} ${f.id}`));
-  if (run.status === "failed") return { resolved: false, reason: run.submitOutcome || "failed", fields: fields.length };
-  // A posting the employer has taken down is not an adapter failure. It is
-  // counted and shown separately rather than folded into either column,
-  // because quietly dropping it would flatter the rate and counting it would
-  // blame the tool for someone else's closed job.
+  // Checked before the failed branch on purpose: a closed posting arrives as a
+  // failure with this outcome, and testing status first put it in the
+  // denominator, which is how Greenhouse read 4/5 when it was 4/4 on postings
+  // that still exist.
   if (run.submitOutcome === "inactive_posting") {
     return { resolved: false, inactive: true, reason: "posting_closed", fields: fields.length };
   }
+  if (run.status === "failed") return { resolved: false, reason: run.submitOutcome || "failed", fields: fields.length };
   if (run.status === "skipped") return { resolved: false, reason: run.submitOutcome || "skipped", fields: fields.length };
   // Identity fields are the floor: an adapter that filled nothing a human would
   // recognise has not resolved the form, whatever its status says.
   if (identity.length < 2) return { resolved: false, reason: "no_identity_fields", fields: fields.length };
-  return { resolved: true, reason: run.submitOutcome || run.status, fields: fields.length };
+
+  // Two different questions, and conflating them would overstate the tool.
+  // "resolved" is whether the adapter reached the real form and filled it.
+  // "complete" is whether anything is left for a person before it could be
+  // submitted -- a form blocked on one unanswered required question is a good
+  // outcome, but it is not a finished application.
+  const blocked = String(run.submitOutcome || "").startsWith("blocked_pre_submit");
+  const leftovers = (run.unresolvedQuestionnaire || []).length;
+  return {
+    resolved: true,
+    complete: !blocked && leftovers === 0,
+    leftovers,
+    reason: run.submitOutcome || run.status,
+    fields: fields.length
+  };
 }
 
 const results = [];
@@ -179,10 +193,16 @@ for (const platform of targets) {
   const passed = live.filter((r) => r.verdict.resolved).length;
   const pct = live.length ? Math.round((passed / live.length) * 100) : 0;
   if (pct < 100 || !live.length) allPass = false;
+  const complete = live.filter((r) => r.verdict.complete).length;
+  const completePct = live.length ? Math.round((complete / live.length) * 100) : 0;
   console.log(
-    `  ${platform.padEnd(16)} ${passed}/${live.length} live  ${String(pct).padStart(3)}%` +
-      (inactive.length ? `   (+${inactive.length} posting${inactive.length === 1 ? "" : "s"} already closed)` : "")
+    `  ${platform.padEnd(16)} reached+filled ${passed}/${live.length} (${String(pct).padStart(3)}%)   ` +
+      `submittable unaided ${complete}/${live.length} (${String(completePct).padStart(3)}%)` +
+      (inactive.length ? `   +${inactive.length} closed` : "")
   );
+  for (const row of live.filter((r) => r.verdict.resolved && !r.verdict.complete)) {
+    console.log(`      needs a person: ${row.verdict.reason}  ${row.job.title?.slice(0, 44) ?? ""}`);
+  }
   for (const row of live.filter((r) => !r.verdict.resolved)) {
     console.log(`      failed: ${row.verdict.reason}  ${row.job.url}`);
   }

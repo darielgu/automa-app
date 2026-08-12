@@ -189,7 +189,10 @@ for (const platform of targets) {
     // with a dozen custom questions and two comboboxes is normal. Too short a
     // wait reports "timeout" for runs that were about to succeed.
     let run = null;
-    for (let i = 0; i < 360; i += 1) {
+    // 20 minutes. The named-ATS adapters finish in under three, but the generic
+    // path routinely needs twelve on a long form and cutting it short reports a
+    // run that was about to succeed as a failure -- which happened twice.
+    for (let i = 0; i < 600; i += 1) {
       await new Promise((r) => setTimeout(r, 2000));
       run = readState().runs.find((entry) => entry.id === runId);
       if (run && TERMINAL.includes(run.status)) break;

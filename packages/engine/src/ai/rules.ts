@@ -634,6 +634,32 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
 export function evaluateProfileMapping(question: ApplicationQuestion, profile: CandidateProfile): RuleEvaluation {
   const normalized = normalize(question.label);
 
+  // "Are you related to anyone who works here?" and its many phrasings. Real
+  // Lever and Greenhouse forms mark this required, and it blocked every live
+  // Lever application measured. Only the applicant knows the answer, so it is
+  // read from what they have already told us and never guessed: a wrong "No"
+  // here is a false statement on a job application.
+  if (
+    includesAny(normalized, [/related to (any|anyone|a )?(current )?employee/, /relative.*(employ|work)/, /family member.*(employ|work)/]) ||
+    (includesAny(normalized, [/know anyone/, /referred by/]) && includesAny(normalized, [/employee/, /work(s|ing)? (here|at)/]))
+  ) {
+    const known = findCustomAnswer(profile, [
+      /related to (any|anyone|a )?(current )?employee/,
+      /relative/,
+      /family member/,
+      /know anyone/,
+      /referred by/
+    ]);
+    if (known !== undefined) {
+      const asBool = coerceBoolean(known);
+      return {
+        answer: typeof asBool === "boolean" ? boolToAnswer(asBool, question.options) : normalizeCustomValue(known),
+        source: "profile",
+        reason: "employee_relationship_custom"
+      };
+    }
+  }
+
   if (includesAny(normalized, [/zip/, /postal/, /post code/, /postcode/])) {
     const postal = preferredPostalCode(profile);
     if (postal) {

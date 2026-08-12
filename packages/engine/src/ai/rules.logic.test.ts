@@ -387,3 +387,26 @@ test("eu member-state citizenship question does not map to profile.state", () =>
   assert.equal(result.answer, "No");
   assert.equal(result.reason, "eu_citizenship_country");
 });
+
+test("the employee-relationship question is answered only from what the user said", () => {
+  // Observed blocking every live Lever application measured:
+  // "Are you related to any current employee/s at Analytic Partners?"
+  const question: ApplicationQuestion = {
+    id: "cards[abc][field0]",
+    label: "Are you related to any current employee/s at Analytic Partners? No or Yes and whom?",
+    type: "text",
+    required: true
+  };
+
+  // Nothing saved: it must stay unanswered. Guessing "No" would put a false
+  // statement on a job application, and it is not ours to make.
+  assert.equal(evaluateProfileMapping(question, profile).answer, undefined);
+
+  const withAnswer: CandidateProfile = {
+    ...profile,
+    customAnswers: { ...(profile.customAnswers ?? {}), "related to any current employee": "No" }
+  };
+  const resolved = evaluateProfileMapping(question, withAnswer);
+  assert.equal(resolved.answer, "No");
+  assert.equal(resolved.source, "profile");
+});

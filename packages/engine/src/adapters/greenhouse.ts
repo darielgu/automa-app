@@ -1827,6 +1827,35 @@ export class GreenhouseAdapter extends BaseAdapter {
 
     if (await waitForFirstName(7000)) return;
 
+    const findEmbeddedGreenhouseUrl = async (): Promise<string> =>
+      page.evaluate(() => {
+        const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe"));
+        for (const frame of frames) {
+          const src = (frame.getAttribute("src") || "").trim();
+          if (!src) continue;
+          const lowered = src.toLowerCase();
+          if (/greenhouse|job_app|gh_jid|gh_src/.test(lowered)) {
+            try {
+              return new URL(src, window.location.href).toString();
+            } catch {
+              return src;
+            }
+          }
+        }
+        return "";
+      }).catch(() => "");
+
+    // Look for the embedded form before clicking anything. On a company-hosted
+    // posting -- a careers page with the Greenhouse form in an iframe -- the
+    // iframe is the reliable route, and each speculative Apply button costs a
+    // click timeout plus ten seconds of waiting for a form that button was
+    // never going to produce. Measured at 73 seconds of a 353-second run.
+    const earlyEmbeddedUrl = await findEmbeddedGreenhouseUrl();
+    if (earlyEmbeddedUrl) {
+      await page.goto(earlyEmbeddedUrl, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
+      if (await waitForFirstName(12000)) return;
+    }
+
     const candidates = [
       page.getByRole("button", { name: /apply/i }).first(),
       page.getByRole("link", { name: /apply/i }).first(),
@@ -1844,24 +1873,9 @@ export class GreenhouseAdapter extends BaseAdapter {
       }
     }
 
-    const embeddedGreenhouseUrl = await page.evaluate(() => {
-      const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe"));
-      for (const frame of frames) {
-        const src = (frame.getAttribute("src") || "").trim();
-        if (!src) continue;
-        const lowered = src.toLowerCase();
-        if (/greenhouse|job_app|gh_jid|gh_src/.test(lowered)) {
-          try {
-            return new URL(src, window.location.href).toString();
-          } catch {
-            return src;
-          }
-        }
-      }
-      return "";
-    }).catch(() => "");
-
-    if (embeddedGreenhouseUrl) {
+    // The page may only have rendered the iframe after the Apply click.
+    const embeddedGreenhouseUrl = await findEmbeddedGreenhouseUrl();
+    if (embeddedGreenhouseUrl && embeddedGreenhouseUrl !== earlyEmbeddedUrl) {
       await page.goto(embeddedGreenhouseUrl, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
       if (await waitForFirstName(12000)) return;
     }

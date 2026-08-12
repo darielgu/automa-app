@@ -1022,7 +1022,12 @@ export class GreenhouseAdapter extends BaseAdapter {
               }).catch(() => false)
             : false;
           let retryApplied = false;
-          if (!verified) {
+          // Retry only when the value went in and did not stick -- that is a
+          // race worth running again. When applyAnswer returned false, every
+          // strategy inside it already failed against a page and a profile that
+          // have not changed, so the identical call cannot do better. It was
+          // measured costing 19 seconds a time, three times per field.
+          if (!verified && applied) {
             retryApplied = true;
             applied = await this.applyAnswer(page, greenhouseQuestion, answerString);
             verified = applied

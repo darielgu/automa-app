@@ -1921,8 +1921,12 @@ export class LeverAdapter extends BaseAdapter {
         const value = normalizeText(await option.getAttribute("value").catch(() => ""));
         const label = normalizeText(await option.locator("xpath=ancestor::label[1]").innerText().catch(() => ""));
         if ([value, label].some((item) => item && (item.toLowerCase() === target.toLowerCase() || item.toLowerCase().includes(target.toLowerCase())))) {
-          await option.check().catch(async () => option.click().catch(() => undefined));
-          return true;
+          // Was: check() falling back to click(), both unbounded, and then
+          // "return true" regardless of whether either landed -- so a radio
+          // Lever had hidden behind a styled label reported as filled while
+          // staying empty.
+          const id = await option.getAttribute("id").catch(() => "");
+          return this.toggleChoiceInput(page, option, id || "", false);
         }
       }
       return false;
@@ -1945,8 +1949,8 @@ export class LeverAdapter extends BaseAdapter {
           return [value, label].some((item) => item && (item.toLowerCase() === normalized || item.toLowerCase().includes(normalized)));
         });
         if (shouldPick) {
-          await option.check().catch(async () => option.click().catch(() => undefined));
-          selected += 1;
+          const id = await option.getAttribute("id").catch(() => "");
+          if (await this.toggleChoiceInput(page, option, id || "", true)) selected += 1;
         }
       }
       return selected > 0;

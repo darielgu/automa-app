@@ -1896,8 +1896,10 @@ export class LeverAdapter extends BaseAdapter {
 
     if (field.fieldType === "textarea") {
       if (!plan.answer) return false;
+      // fill() can fail silently on a control the page has disabled or covered.
+      // Returning true regardless recorded an answer that was never typed.
       await locator.fill(plan.answer).catch(() => undefined);
-      return true;
+      return this.textValueLanded(locator, plan.answer);
     }
 
     if (field.fieldType === "location_autocomplete") {
@@ -1971,10 +1973,29 @@ export class LeverAdapter extends BaseAdapter {
     if (["text", "email", "phone", "unknown"].includes(field.fieldType)) {
       if (!plan.answer) return false;
       await locator.fill(plan.answer).catch(() => undefined);
-      return true;
+      return this.textValueLanded(locator, plan.answer);
     }
 
     return false;
+  }
+
+  /**
+   * Whether the value is actually in the control now.
+   *
+   * The point of reading it back is that an application which reports a field
+   * as filled, and submits without it, costs the user the job rather than a
+   * retry. Some fields normalise what they were given -- a phone control may
+   * reformat -- so a prefix or containment counts, but empty never does.
+   */
+  private async textValueLanded(
+    locator: ReturnType<AdapterRunContext["page"]["locator"]>,
+    expected: string
+  ): Promise<boolean> {
+    const actual = await locator.inputValue().catch(() => "");
+    if (!actual) return false;
+    const a = normalizeText(actual).toLowerCase();
+    const b = normalizeText(expected).toLowerCase();
+    return a === b || a.includes(b) || b.includes(a);
   }
 
   private async verifyFieldValue(

@@ -1769,6 +1769,19 @@ export class GreenhouseAdapter extends BaseAdapter {
 
       result.status = "failed";
       result.error = error instanceof Error ? error.message : String(error);
+
+      // A posting that has closed is not a failed application. Recording it as
+      // one blames the tool for the employer taking the job down, and buries
+      // the fact worth telling the user: this role is gone, move on.
+      if (/^inactive_posting:/.test(result.error)) {
+        result.status = "skipped";
+        result.submitOutcome = "inactive_posting";
+        result.notes.push(`greenhouse_${result.error}`);
+        result.error = undefined;
+        result.finishedAt = new Date().toISOString();
+        return result;
+      }
+
       if (isSessionLostError(error)) {
         result.submitOutcome = "session_lost";
         const stageMatch = result.error.match(/session_lost:([^:\s]+)/i);
@@ -1845,7 +1858,42 @@ export class GreenhouseAdapter extends BaseAdapter {
     }
 
     if (await waitForFirstName(5000)) return;
+
+    // Before calling this a failure, ask whether there is still a job here.
+    // Greenhouse answers a dead posting by redirecting to the company's board
+    // index with ?error=true, so the form is missing because the role is gone,
+    // not because the adapter could not cope with it. Reporting those the same
+    // way tells the user Automa is broken when the posting simply closed, and
+    // makes every measurement of how well the adapter works look worse than
+    // the truth.
+    const closure = await this.detectClosedPosting(page).catch(() => null);
+    if (closure) throw new Error(`inactive_posting:${closure}`);
+
     throw new Error("application_form_not_ready:first_name_missing");
+  }
+
+  private async detectClosedPosting(page: AdapterRunContext["page"]): Promise<string | null> {
+    const currentUrl = page.url();
+    if (/[?&]error=true/i.test(currentUrl)) return "board_error_redirect";
+    // A job URL carries a numeric id; a board index does not.
+    if (/job-boards\.greenhouse\.io\/[^/]+\/?$/i.test(currentUrl)) return "redirected_to_board_index";
+
+    const bodyText = await page
+      .locator("body")
+      .innerText()
+      .then((text) => text.slice(0, 4000).toLowerCase())
+      .catch(() => "");
+    const closedPhrases = [
+      "no longer accepting applications",
+      "this job is no longer available",
+      "job not found",
+      "posting not found",
+      "position has been filled",
+      "this role has closed",
+      "no longer open"
+    ];
+    const match = closedPhrases.find((phrase) => bodyText.includes(phrase));
+    return match ? `page_text:${match}` : null;
   }
 
   private async probeLiveSelectOptions(

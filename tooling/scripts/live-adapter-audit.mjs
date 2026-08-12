@@ -62,6 +62,13 @@ function classify(run) {
   }
   const identity = fields.filter((f) => /first|last|name|email|phone/i.test(`${f.label} ${f.id}`));
   if (run.status === "failed") return { resolved: false, reason: run.submitOutcome || "failed", fields: fields.length };
+  // A posting the employer has taken down is not an adapter failure. It is
+  // counted and shown separately rather than folded into either column,
+  // because quietly dropping it would flatter the rate and counting it would
+  // blame the tool for someone else's closed job.
+  if (run.submitOutcome === "inactive_posting") {
+    return { resolved: false, inactive: true, reason: "posting_closed", fields: fields.length };
+  }
   if (run.status === "skipped") return { resolved: false, reason: run.submitOutcome || "skipped", fields: fields.length };
   // Identity fields are the floor: an adapter that filled nothing a human would
   // recognise has not resolved the form, whatever its status says.
@@ -142,12 +149,20 @@ let allPass = true;
 for (const platform of targets) {
   const rows = results.filter((r) => r.platform === platform);
   if (!rows.length) continue;
-  const passed = rows.filter((r) => r.verdict.resolved).length;
-  const pct = Math.round((passed / rows.length) * 100);
-  if (pct < 100) allPass = false;
-  console.log(`  ${platform.padEnd(16)} ${passed}/${rows.length}  ${String(pct).padStart(3)}%`);
-  for (const row of rows.filter((r) => !r.verdict.resolved)) {
+  const inactive = rows.filter((r) => r.verdict.inactive);
+  const live = rows.filter((r) => !r.verdict.inactive);
+  const passed = live.filter((r) => r.verdict.resolved).length;
+  const pct = live.length ? Math.round((passed / live.length) * 100) : 0;
+  if (pct < 100 || !live.length) allPass = false;
+  console.log(
+    `  ${platform.padEnd(16)} ${passed}/${live.length} live  ${String(pct).padStart(3)}%` +
+      (inactive.length ? `   (+${inactive.length} posting${inactive.length === 1 ? "" : "s"} already closed)` : "")
+  );
+  for (const row of live.filter((r) => !r.verdict.resolved)) {
     console.log(`      failed: ${row.verdict.reason}  ${row.job.url}`);
+  }
+  for (const row of inactive) {
+    console.log(`      closed: ${row.job.url}`);
   }
 }
 

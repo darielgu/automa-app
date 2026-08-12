@@ -1756,3 +1756,23 @@ test("declining never invents an answer when the form offers no way to decline",
   assert.equal(picked, "Decline to self-identify");
   assert.equal(["Yes", "No"].includes(picked), false);
 });
+
+test("a closed posting is skipped, not reported as a broken adapter", () => {
+  // Greenhouse answers a dead posting by redirecting to the company's board
+  // index with ?error=true. Observed live on a US Conec listing that the feed
+  // still believed was open.
+  const closedUrls = [
+    "https://job-boards.greenhouse.io/usconec?error=true",
+    "https://job-boards.greenhouse.io/usconec/",
+    "https://job-boards.greenhouse.io/usconec"
+  ];
+  for (const url of closedUrls) {
+    const isBoardIndex = /job-boards\.greenhouse\.io\/[^/]+\/?$/i.test(url);
+    const isErrorRedirect = /[?&]error=true/i.test(url);
+    assert.equal(isBoardIndex || isErrorRedirect, true, `${url} should read as closed`);
+  }
+  // A live posting must not trip either rule.
+  const live = "https://job-boards.greenhouse.io/usconec/jobs/4308970009";
+  assert.equal(/[?&]error=true/i.test(live), false);
+  assert.equal(/job-boards\.greenhouse\.io\/[^/]+\/?$/i.test(live), false);
+});

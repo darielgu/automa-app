@@ -475,7 +475,15 @@ export interface FilledFieldRecord {
   id: string;
   label: string;
   value: string;
-  source: "seeded" | "rule" | "profile" | "llm" | "fallback" | "manual";
+  /**
+   * Where the value came from.
+   *
+   * "prefilled" means the form already held it and Automa left it alone. It is
+   * separate from the rest because a receipt that says "Automa filled this"
+   * about a value the page supplied is a false claim, and because counting
+   * those as work done overstates how much of a form was actually completed.
+   */
+  source: "seeded" | "rule" | "profile" | "llm" | "fallback" | "manual" | "prefilled";
   inputKind?: string;
 }
 

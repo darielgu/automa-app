@@ -69,7 +69,12 @@ if (!page) {
 const TERMINAL = ["completed", "failed", "cancelled", "skipped"];
 
 function classify(run) {
-  const fields = (run.filledFields || []).filter((f) => !String(f.id || "").startsWith("__"));
+  // Values the form arrived with are not work this tool did. Counting them
+  // inflated an early measurement to "19 fields" when 13 were country-code
+  // selectors the page had already set to +1.
+  const fields = (run.filledFields || [])
+    .filter((f) => !String(f.id || "").startsWith("__"))
+    .filter((f) => f.source !== "prefilled");
   // A run that never finished is not a run that filled nothing. Reporting it as
   // "no_identity_fields" hides the real problem, which is duration.
   if (!TERMINAL.includes(run.status)) {

@@ -2437,8 +2437,10 @@ export class AshbyAdapter extends BaseAdapter {
   }
 
   private toAnswerSource(
-    source: "seeded" | "rule" | "profile" | "llm" | "fallback" | "manual"
+    source: "seeded" | "rule" | "profile" | "llm" | "fallback" | "manual" | "prefilled"
   ): ResolvedAnswer["source"] {
+    // A value the form arrived with is not an answer this run produced.
+    if (source === "prefilled") return "manual";
     if (
       source === "seeded" ||
       source === "rule" ||

@@ -961,7 +961,11 @@ export class GreenhouseAdapter extends BaseAdapter {
                   id: field.key,
                   label: question.label,
                   value: preexistingState.currentValue,
-                  source: "manual",
+                  // The page already had this. Recording it as "manual" claimed
+                  // credit for the form's own defaults: a live posting reported
+                  // 19 filled fields of which 13 were country-code selectors
+                  // that arrived reading "+1".
+                  source: "prefilled",
                   inputKind: mapInputType(field.controlType, field.options ?? []).kind
                 });
                 processedQuestionIds.add(field.key);
@@ -4368,14 +4372,20 @@ export class GreenhouseAdapter extends BaseAdapter {
           attemptedFieldKeys.add(fieldAttemptKey);
           const fallbackCandidates = this.defaultComboboxFallbackCandidates(field.label, profile);
           applied = await this.selectComboboxByMissingField(page, field, fallbackCandidates);
-          const verified = applied
-            ? await this.verifyFieldSatisfied(page, field.id, "select", fallbackCandidates[0] ?? "").catch(() => false)
+          // With no candidate there is nothing to have chosen, so there is
+          // nothing to verify against and nothing to record. Defaulting the
+          // recorded value to "Yes" wrote an answer into the receipt that was
+          // never selected -- on a required question, agreeing to something
+          // nobody agreed to.
+          const chosen = fallbackCandidates[0];
+          const verified = applied && chosen
+            ? await this.verifyFieldSatisfied(page, field.id, "select", chosen).catch(() => false)
             : false;
-          if (verified) {
+          if (verified && chosen) {
             this.upsertFilledField(filledFields, {
               id: field.id,
               label: field.label || this.humanizeId(field.id),
-              value: fallbackCandidates[0] ?? "Yes",
+              value: chosen,
               source: "manual",
               inputKind: "select"
             });

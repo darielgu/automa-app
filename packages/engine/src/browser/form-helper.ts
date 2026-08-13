@@ -345,28 +345,34 @@ export async function extractVisibleFields(scope: FillScope): Promise<DetectedFi
         if (group.tag === "input" && (inputType === "radio" || inputType === "checkbox") && name) {
           const groupedKey = `${inputType}:${name}`;
           const existingIndex = groupedByName.get(groupedKey);
+          // These three are the same lookups getLabelText performs, and they
+          // were re-implemented here without its timeout. Left on the 8s
+          // default, one radio or checkbox input could wait 24 seconds to learn
+          // that markup which cannot exist on this page does not exist.
           const labelByFor =
             id && id.trim()
-              ? normalizeText((await scope.locator(`label[for="${safeCssAttribute(id)}"]`).first().textContent().catch(() => "")) ?? "")
+              ? normalizeText(
+                  (await scope
+                    .locator(`label[for="${safeCssAttribute(id)}"]`)
+                    .first()
+                    .textContent({ timeout: LABEL_LOOKUP_TIMEOUT_MS })
+                    .catch(() => "")) ?? ""
+                )
               : "";
-          const ancestorLabel = normalizeText((await control.locator("xpath=ancestor::label[1]").textContent().catch(() => "")) ?? "");
+          const ancestorLabel = normalizeText(
+            (await control
+              .locator("xpath=ancestor::label[1]")
+              .textContent({ timeout: LABEL_LOOKUP_TIMEOUT_MS })
+              .catch(() => "")) ?? ""
+          );
           const ariaLabel = normalizeText((await control.getAttribute("aria-label").catch(() => "")) ?? "");
           const choiceLabel = labelByFor || ancestorLabel || ariaLabel || label;
-          const questionLabel =
-            normalizeText(
-              (await control
-                .locator(
-                  "xpath=ancestor::*[@data-field-path][1]//*[contains(@class,'ashby-application-form-question-title')][1]"
-                )
-                .first()
-                .textContent()
-                .catch(() => "")) ?? ""
-            ) ||
-            label ||
-            name ||
-            id ||
-            groupedKey;
 
+          // Merging a repeat option needs only choiceLabel and required, so this
+          // returns before the question-title lookup below. That lookup is
+          // Ashby-specific and its result is read in exactly one place -- the
+          // new-field branch -- so every option after the first in a group used
+          // to pay for a string that was then discarded.
           if (existingIndex !== undefined) {
             const existing = fields[existingIndex];
             if (existing) {
@@ -381,6 +387,21 @@ export async function extractVisibleFields(scope: FillScope): Promise<DetectedFi
             }
             continue;
           }
+
+          const questionLabel =
+            normalizeText(
+              (await control
+                .locator(
+                  "xpath=ancestor::*[@data-field-path][1]//*[contains(@class,'ashby-application-form-question-title')][1]"
+                )
+                .first()
+                .textContent({ timeout: LABEL_LOOKUP_TIMEOUT_MS })
+                .catch(() => "")) ?? ""
+            ) ||
+            label ||
+            name ||
+            id ||
+            groupedKey;
 
           const optionCount = await scope
             .locator(`input[type="${inputType}"][name="${safeCssAttribute(name)}"]`)
@@ -473,10 +494,12 @@ export async function extractVisibleFields(scope: FillScope): Promise<DetectedFi
     if (!(await controlIsVisible(combo))) continue;
 
     const fieldPath = normalizeText(
+      // Ashby-only attribute, so a guaranteed miss and a guaranteed 8 seconds
+      // on every combobox of every other platform's forms.
       (await combo
         .locator("xpath=ancestor::*[@data-field-path][1]")
         .first()
-        .getAttribute("data-field-path")
+        .getAttribute("data-field-path", { timeout: LABEL_LOOKUP_TIMEOUT_MS })
         .catch(() => "")) ?? ""
     );
     if (fieldPath && knownFieldPaths.has(fieldPath.toLowerCase())) continue;

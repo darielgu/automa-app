@@ -655,6 +655,8 @@ export function evaluateSubmitStopReason(input: {
 export class GreenhouseAdapter extends BaseAdapter {
   readonly platform = "greenhouse" as const;
   private aiAnswerCache = new Map<string, ResolvedAnswer>();
+  /** The posting this run was asked for, to tell a redirect from a form. */
+  private currentTargetUrl?: string;
 
   canHandle(url: string): boolean {
     return hasGreenhouseUrlSignals(url);
@@ -875,6 +877,7 @@ export class GreenhouseAdapter extends BaseAdapter {
         this.assertLlmConfiguredForGreenhouseAutoSubmit(config);
       }
       this.pushStageNote(result, "navigate");
+      this.currentTargetUrl = target.url;
 
       await page.goto(target.url, {
         waitUntil: "domcontentloaded",
@@ -1889,14 +1892,26 @@ export class GreenhouseAdapter extends BaseAdapter {
     // way tells the user Automa is broken when the posting simply closed, and
     // makes every measurement of how well the adapter works look worse than
     // the truth.
-    const closure = await this.detectClosedPosting(page).catch(() => null);
+    const closure = await this.detectClosedPosting(page, this.currentTargetUrl).catch(() => null);
     if (closure) throw new Error(`inactive_posting:${closure}`);
 
     throw new Error("application_form_not_ready:first_name_missing");
   }
 
-  private async detectClosedPosting(page: AdapterRunContext["page"]): Promise<string | null> {
+  private async detectClosedPosting(
+    page: AdapterRunContext["page"],
+    targetUrl?: string
+  ): Promise<string | null> {
     const currentUrl = page.url();
+
+    // Landed somewhere that no longer mentions this job. Assured Guaranty
+    // answers a closed posting by redirecting to assuredguaranty.com/careers,
+    // an entirely different host, so the board-index and ?error=true rules
+    // below never see it and a gone job was reported as a broken adapter.
+    if (targetUrl) {
+      const jobId = targetUrl.match(/(?:jobs\/|gh_jid=)(\d{5,})/)?.[1];
+      if (jobId && !currentUrl.includes(jobId)) return "redirected_off_posting";
+    }
     if (/[?&]error=true/i.test(currentUrl)) return "board_error_redirect";
     // A job URL carries a numeric id; a board index does not.
     if (/job-boards\.greenhouse\.io\/[^/]+\/?$/i.test(currentUrl)) return "redirected_to_board_index";

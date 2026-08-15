@@ -630,10 +630,16 @@ export function resolveDeterministicProfileValue(
     };
   }
 
-  if (/u\.?s\.? person|export control/.test(label)) {
+  if (/u\.?s\.? person|export control/.test(label) && field.possibleAnswers.length <= 2) {
     const usPerson = profile.exportControl?.usPerson ?? profile.workAuthorization?.usCitizen ?? profile.workAuthorization?.permanentResident;
     const yesNo = usPerson ? "Yes" : "No";
     const repaired = validateAndRepairOption(field.fieldType, field.possibleAnswers, yesNo, [yesNo]);
+    // A citizenship-status list is not a Yes/No question. When the repair
+    // finds no matching option, fall through to the shared rules engine
+    // instead of locking in an empty plan.
+    if (!repaired.answer && repaired.selectedOptions.length === 0) {
+      return null;
+    }
     return {
       fieldId: field.fieldId,
       fieldType: field.fieldType,
@@ -1623,6 +1629,7 @@ export class LeverAdapter extends BaseAdapter {
         fieldId: field.fieldId,
         label: field.label,
         rawAnswer,
+        resolvedSource: candidate?.source ?? null,
         llmReason: candidate?.reason ?? ""
       });
 
@@ -1634,6 +1641,11 @@ export class LeverAdapter extends BaseAdapter {
         answer = rawAnswer ? "Yes" : "No";
       } else if (rawAnswer !== null && rawAnswer !== undefined) {
         answer = normalizeText(rawAnswer);
+      }
+      // A checkbox group repaired from selectedOptions only; a single string
+      // answer from the rules engine must survive as a one-item selection.
+      if (field.fieldType === "checkbox_group" && answer && selectedOptions.length === 0) {
+        selectedOptions = [answer];
       }
 
       const repaired = validateAndRepairOption(field.fieldType, field.possibleAnswers, answer, selectedOptions);
@@ -1654,12 +1666,15 @@ export class LeverAdapter extends BaseAdapter {
         );
       }
 
+      // The engine runs deterministic rules before any LLM; report what
+      // actually answered so gap analyses stop misreading rules as LLM.
+      const resolvedDeterministically = candidate?.source === "rule" || candidate?.source === "profile";
       planned.set(field.fieldId, {
         fieldId: field.fieldId,
         fieldType: field.fieldType,
         answer: repaired.answer,
         selectedOptions: repaired.selectedOptions,
-        source: "llm_inference",
+        source: resolvedDeterministically ? "deterministic_profile" : "llm_inference",
         reason: candidate?.reason || (recoveryMode ? "llm_recovery" : "llm_unresolved"),
         locked: false,
         unknownField: true,
@@ -1734,6 +1749,7 @@ export class LeverAdapter extends BaseAdapter {
         if (Array.isArray(rawRetry)) selectedOptions = rawRetry.map((item) => normalizeText(item)).filter(Boolean);
         else if (typeof rawRetry === "boolean") answer = rawRetry ? "Yes" : "No";
         else if (rawRetry !== null && rawRetry !== undefined) answer = normalizeText(rawRetry);
+        if (field.fieldType === "checkbox_group" && answer && selectedOptions.length === 0) selectedOptions = [answer];
         const repairedRetry = validateAndRepairOption(field.fieldType, field.possibleAnswers, answer, selectedOptions);
         const current = planned.get(field.fieldId);
         const improved =

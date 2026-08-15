@@ -37,8 +37,19 @@ const EU_EFTA_COUNTRIES = new Set([
   "switzerland"
 ]);
 
+const SANCTIONED_COUNTRIES = new Set(["cuba", "iran", "north korea", "syria", "russia", "belarus", "venezuela"]);
+
 function normalize(text: string): string {
-  return text.trim().toLowerCase();
+  // Lever appends its required-marker glyph (✱, U+2731) to every scraped
+  // label, and many labels end with a colon. Both broke the exact-equality
+  // branches below, so they are stripped here for every platform.
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[✱*]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[:\s]+$/, "")
+    .trim();
 }
 
 function includesAny(value: string, patterns: RegExp[]): boolean {
@@ -55,23 +66,25 @@ function findCustomAnswer(profile: CandidateProfile, patterns: RegExp[]): string
   return undefined;
 }
 
+const MONTH_NUMBERS = new Map<string, string>([
+  ["january", "01"], ["jan", "01"], ["february", "02"], ["feb", "02"], ["march", "03"], ["mar", "03"],
+  ["april", "04"], ["apr", "04"], ["may", "05"], ["june", "06"], ["jun", "06"], ["july", "07"], ["jul", "07"],
+  ["august", "08"], ["aug", "08"], ["september", "09"], ["sep", "09"], ["sept", "09"], ["october", "10"], ["oct", "10"],
+  ["november", "11"], ["nov", "11"], ["december", "12"], ["dec", "12"]
+]);
+
+function monthNumberFrom(raw: string): string {
+  const text = String(raw || "").trim().toLowerCase();
+  if (!text) return "";
+  if (/^\d{1,2}$/.test(text)) return text.padStart(2, "0");
+  return MONTH_NUMBERS.get(text) || "";
+}
+
 function normalizeGraduationDateProfileValue(input: CandidateProfile["education"]): {
   mmDdYyyy?: string;
   mmYyyy?: string;
 } {
   if (!input) return {};
-  const normalizeMonth = (raw: string): string => {
-    const text = String(raw || "").trim().toLowerCase();
-    if (!text) return "";
-    if (/^\d{1,2}$/.test(text)) return text.padStart(2, "0");
-    const monthMap = new Map<string, string>([
-      ["january", "01"], ["jan", "01"], ["february", "02"], ["feb", "02"], ["march", "03"], ["mar", "03"],
-      ["april", "04"], ["apr", "04"], ["may", "05"], ["june", "06"], ["jun", "06"], ["july", "07"], ["jul", "07"],
-      ["august", "08"], ["aug", "08"], ["september", "09"], ["sep", "09"], ["sept", "09"], ["october", "10"], ["oct", "10"],
-      ["november", "11"], ["nov", "11"], ["december", "12"], ["dec", "12"]
-    ]);
-    return monthMap.get(text) || "";
-  };
   const full = String(input.graduationDateMmDdYyyy || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (full) {
     const month = full[1]!.padStart(2, "0");
@@ -91,7 +104,7 @@ function normalizeGraduationDateProfileValue(input: CandidateProfile["education"
       mmYyyy: `${month}/${year}`
     };
   }
-  const month = normalizeMonth(String(input.endMonth || ""));
+  const month = monthNumberFrom(String(input.endMonth || ""));
   const year = String(input.endYear || input.graduationYear || "").trim();
   if (!month || !year) return {};
   return {
@@ -126,17 +139,118 @@ function preferredPostalCode(profile: CandidateProfile): string | undefined {
   return fromLocation?.[0];
 }
 
+/**
+ * Street, city, and state resolvers with the same fallback idea as
+ * preferredPostalCode: the Workday block is the only structured address in
+ * the schema, so it is read first, then locationStructured, then whatever
+ * can be parsed out of the free-text basics.location.
+ */
+function preferredStreetAddress(profile: CandidateProfile): string | undefined {
+  const address = profile.workday?.contact?.address;
+  const line1 = address?.line1?.trim();
+  if (line1) {
+    const line2 = address?.line2?.trim();
+    return line2 ? `${line1}, ${line2}` : line1;
+  }
+  // A leading "500 Folsom St" segment inside a free-text location.
+  const fromLocation = (profile.basics.location ?? "").trim().match(/^\d+\s+[^,]+/);
+  return fromLocation?.[0];
+}
+
+function preferredCity(profile: CandidateProfile): string | undefined {
+  const structured = profile.locationStructured?.city?.trim();
+  if (structured) return structured;
+  const workdayCity = profile.workday?.contact?.address?.city?.trim();
+  if (workdayCity) return workdayCity;
+  const parts = (profile.basics.location ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  // Skip a leading street segment; the city never starts with a digit.
+  return parts.find((part) => !/^\d/.test(part)) || undefined;
+}
+
+function preferredState(profile: CandidateProfile): string | undefined {
+  return (
+    profile.state?.trim() ||
+    profile.locationStructured?.region?.trim() ||
+    profile.workday?.contact?.address?.state?.trim() ||
+    undefined
+  );
+}
+
+function preferredFullAddress(profile: CandidateProfile): string | undefined {
+  const address = profile.workday?.contact?.address;
+  const joined = [address?.line1, address?.line2, address?.city, address?.state, address?.postalCode]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(", ");
+  if (joined) return joined;
+  return profile.basics.location?.trim() || undefined;
+}
+
 function preferredBasedLocation(profile: CandidateProfile): string | undefined {
   const rawLocation = profile.basics.location?.trim() ?? "";
-  const city = rawLocation
+  const rawCity = rawLocation
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean)[0];
-  const state = profile.state?.trim();
+  const city = rawCity ?? preferredCity(profile);
+  const state = preferredState(profile);
   if (city && state) {
     return `${city}, ${state}`;
   }
-  return rawLocation || undefined;
+  return rawLocation || city || undefined;
+}
+
+function preferredEarliestStart(profile: CandidateProfile, label: string): string | undefined {
+  const raw = (profile.logistics?.earliestStartDate ?? profile.logistics?.earliest_start_date)?.trim();
+  if (!raw) return undefined;
+  if (/month\/year|month and year|mm\/yyyy/.test(label)) {
+    const monthYear = raw.match(/^([a-z]+|\d{1,2})[ /-]+(\d{4})$/i);
+    if (monthYear) {
+      const month = monthNumberFrom(monthYear[1]!);
+      if (month) return `${month}/${monthYear[2]}`;
+    }
+    const full = raw.match(/^(\d{1,2})\/\d{1,2}\/(\d{4})$/);
+    if (full) return `${full[1]!.padStart(2, "0")}/${full[2]}`;
+  }
+  return raw;
+}
+
+function formatEducationStart(profile: CandidateProfile, label: string): string | undefined {
+  const startMonth = profile.education?.startMonth?.trim();
+  const startYear = profile.education?.startYear?.trim();
+  if (!startYear) return undefined;
+  if (/mm\/yyyy|month\/year/.test(label)) {
+    const month = monthNumberFrom(startMonth || "");
+    if (month) return `${month}/${startYear}`;
+  }
+  return startMonth ? `${startMonth} ${startYear}` : startYear;
+}
+
+/**
+ * Degree selects rarely offer the profile's exact wording: the profile says
+ * "Bachelor of Science" and the form offers "Bachelors". Match by degree
+ * level, highest first, in both directions.
+ */
+function pickDegreeLevelOption(options: string[] | undefined, degreeText: string | undefined): string | undefined {
+  if (!options?.length || !degreeText) return undefined;
+  const normalizedDegree = normalize(degreeText);
+  const levels: RegExp[] = [
+    /doctor|phd|ph\.d/,
+    /\bmba\b/,
+    /master|m\.s\.|\bms\b|m\.a\./,
+    /bachelor|b\.s\.|\bbs\b|b\.a\./,
+    /associate/,
+    /high school|ged/
+  ];
+  for (const level of levels) {
+    if (!level.test(normalizedDegree)) continue;
+    const option = options.find((item) => level.test(normalize(item)));
+    if (option) return option;
+  }
+  return undefined;
 }
 
 function pickOptionByPatterns(options: string[] | undefined, patterns: RegExp[]): string | undefined {
@@ -282,6 +396,54 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
     }
   }
 
+  if (!sponsorshipIntent && includesAny(label, [/right to work/, /legal requirements to work/])) {
+    const foreignGeo = includesAny(label, [
+      /\buk\b/,
+      /united kingdom/,
+      /solihull/,
+      /england/,
+      /scotland/,
+      /\bcanada\b/,
+      /australia/,
+      /germany/,
+      /ireland/,
+      /singapore/,
+      /\bindia\b/
+    ]);
+    if (foreignGeo) {
+      // The profile only records US work authorization. A non-US right to
+      // work must come from the applicant, never from a guess.
+      const custom = findCustomAnswer(profile, [/right to work/, /legal requirements to work/]);
+      if (custom !== undefined) {
+        const asBool = coerceBoolean(custom);
+        return {
+          answer: typeof asBool === "boolean" ? boolToAnswer(asBool, question.options) : normalizeCustomValue(custom),
+          source: "rule",
+          reason: "right_to_work_custom"
+        };
+      }
+      if (/united states|^us$|^usa$/i.test(profile.country || "")) {
+        return {
+          answer: boolToAnswer(false, question.options),
+          source: "rule",
+          reason: "right_to_work_foreign_no"
+        };
+      }
+      return {};
+    }
+    const authorized = profile.workAuthorization?.authorizedToWork;
+    if (typeof authorized === "boolean") {
+      const mapped = boolToAnswer(authorized, question.options);
+      if (mapped !== null) {
+        return {
+          answer: mapped,
+          source: "rule",
+          reason: "work_authorization_right_to_work"
+        };
+      }
+    }
+  }
+
   if (includesAny(label, [/rising senior/, /recent college graduate/, /currently enrolled/, /student status/, /current student/])) {
     const inferred = inferIsRisingSeniorOrRecentGrad(profile);
     if (typeof inferred === "boolean") {
@@ -339,12 +501,80 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
   }
 
   if (
-    includesAny(label, [/export control/, /citizenship/, /nationality/, /permanent residence/, /which option applies to you/]) &&
+    includesAny(label, [/(citizen|national|resident) of/, /sanctioned countr/]) &&
+    includesAny(label, [/\bcuba\b/, /\biran\b/, /north korea/, /\bsyria\b/, /\brussia\b/, /\bbelarus\b/, /venezuela/])
+  ) {
+    // A wrong "No" here is a false export-control statement, so the answer
+    // only comes from a known, non-sanctioned country of citizenship.
+    const normalizedCountry = normalize(profile.country || "");
+    if (normalizedCountry && !SANCTIONED_COUNTRIES.has(normalizedCountry)) {
+      return {
+        answer: boolToAnswer(false, question.options),
+        source: "rule",
+        reason: "sanctioned_country_citizenship"
+      };
+    }
+    return {};
+  }
+
+  if (
+    includesAny(label, [
+      /export control/,
+      /citizenship/,
+      /nationality/,
+      /permanent residence/,
+      /which option applies to you/,
+      /u\.?s\.? person/,
+      /best describes your (citizenship|immigration|work authorization) status/,
+      /are you one of the following.*(citizen|resident|refugee|asylum)/,
+      /citizens or permanent residents/
+    ]) &&
     question.options?.length
   ) {
     const options = question.options;
     const findOption = (patterns: RegExp[]): string | undefined =>
       options.find((option) => patterns.some((pattern) => pattern.test(option.toLowerCase())));
+    // Explicit profile flags outrank the authorization heuristic below.
+    if (profile.workAuthorization?.usCitizen === true) {
+      const citizenOption = findOption([
+        /citizen or national of the united states/,
+        /u\.?s\.? citizen/,
+        /united states citizen/,
+        /\bcitizen\b/
+      ]);
+      if (citizenOption) {
+        return {
+          answer: citizenOption,
+          source: "rule",
+          reason: "export_control_status"
+        };
+      }
+    }
+    if (profile.workAuthorization?.permanentResident === true) {
+      const residentOption = findOption([/lawful permanent resident/, /green ?card/, /permanent resident/]);
+      if (residentOption) {
+        return {
+          answer: residentOption,
+          source: "rule",
+          reason: "export_control_status"
+        };
+      }
+    }
+    if (
+      includesAny(label, [/are you one of the following/, /u\.?s\.? person/, /citizens or permanent residents/]) &&
+      (profile.exportControl?.usPerson === true ||
+        profile.workAuthorization?.usCitizen === true ||
+        profile.workAuthorization?.permanentResident === true)
+    ) {
+      const mapped = boolToAnswer(true, question.options);
+      if (mapped !== null) {
+        return {
+          answer: mapped,
+          source: "rule",
+          reason: "export_control_us_person"
+        };
+      }
+    }
     const authorizedNoSponsor =
       profile.workAuthorization?.authorizedToWork === true ||
       profile.workAuthorization?.requiresSponsorship === false ||
@@ -352,7 +582,8 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
     if (authorizedNoSponsor) {
       const citizenOrResident = findOption([
         /citizen or national of the united states/,
-        /lawful permanent resident|greencard|green card holder/,
+        /u\.?s\.? citizen/,
+        /lawful permanent resident|greencard|green ?card/,
         /\bcitizen\b/
       ]);
       if (citizenOrResident) {
@@ -395,6 +626,30 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
     return { answer: profile.links.github, source: "rule", reason: "github" };
   }
 
+  if (includesAny(label, [/twitter/, /^x (url|profile|handle)/])) {
+    const customTwitter = findCustomAnswer(profile, [/twitter/, /^x ?(url|profile|handle)/]);
+    if (typeof customTwitter === "string" && customTwitter.trim()) {
+      return { answer: customTwitter.trim(), source: "rule", reason: "twitter_url_custom" };
+    }
+    // No profile field holds a Twitter/X URL; never substitute another link.
+    return {};
+  }
+
+  if (includesAny(label, [/other (url|website|link)/])) {
+    const customOther = findCustomAnswer(profile, [/other (url|website|link)/]);
+    if (typeof customOther === "string" && customOther.trim()) {
+      return { answer: customOther.trim(), source: "rule", reason: "other_url_custom" };
+    }
+    if (profile.links?.portfolio || profile.links?.website) {
+      return {
+        answer: profile.links.portfolio ?? profile.links.website ?? null,
+        source: "rule",
+        reason: "other_url"
+      };
+    }
+    return {};
+  }
+
   if (includesAny(label, [/portfolio/, /website/]) && (profile.links?.portfolio || profile.links?.website)) {
     return {
       answer: profile.links.portfolio ?? profile.links.website ?? null,
@@ -411,12 +666,22 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
     };
   }
 
-  if (includesAny(label, [/salary/, /compensation/, /pay.*expect/, /desired.*pay/]) && profile.salary) {
-    return {
-      answer: profile.salary,
-      source: "rule",
-      reason: "salary"
-    };
+  if (includesAny(label, [/salary/, /compensation/, /pay.*expect/, /desired.*pay/])) {
+    if (profile.salary) {
+      return {
+        answer: profile.salary,
+        source: "rule",
+        reason: "salary"
+      };
+    }
+    const customSalary = findCustomAnswer(profile, [/salary/, /compensation/, /desired pay/, /pay expectation/]);
+    if (customSalary !== undefined) {
+      return {
+        answer: normalizeCustomValue(customSalary),
+        source: "rule",
+        reason: "salary_custom"
+      };
+    }
   }
 
   if (includesAny(label, [/\bgpa\b/]) && profile.education?.gpa) {
@@ -425,6 +690,38 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
       source: "rule",
       reason: "gpa"
     };
+  }
+
+  if (includesAny(label, [/pronoun/])) {
+    const customPronouns = findCustomAnswer(profile, [/pronoun/]);
+    if (customPronouns !== undefined) {
+      return {
+        answer: normalizeCustomValue(customPronouns),
+        source: "rule",
+        reason: "pronouns_custom"
+      };
+    }
+    const decline = pickOptionByPatterns(question.options, [/decline/, /prefer not/, /do not wish/, /not to answer/]);
+    if (decline) {
+      return { answer: decline, source: "rule", reason: "pronouns_decline" };
+    }
+    return {};
+  }
+
+  if (includesAny(label, [/age range/, /age group/])) {
+    const customAge = findCustomAnswer(profile, [/age range/, /age group/]);
+    if (customAge !== undefined) {
+      return {
+        answer: normalizeCustomValue(customAge),
+        source: "rule",
+        reason: "age_range_custom"
+      };
+    }
+    const decline = pickOptionByPatterns(question.options, [/decline/, /prefer not/, /do not wish/, /not to answer/]);
+    if (decline) {
+      return { answer: decline, source: "rule", reason: "age_range_decline" };
+    }
+    return {};
   }
 
   if (includesAny(label, [/gender/, /sex/])) {
@@ -555,9 +852,36 @@ export function evaluateDeterministicRule(question: ApplicationQuestion, profile
   }
 
   if (
-    includesAny(label, [/start.*date/, /earliest.*start/, /when.*start/, /available.*start/]) &&
-    !includesAny(label, [/start.*date.*month/, /start.*date.*year/])
+    includesAny(label, [
+      /start.*date/,
+      /earliest.*start/,
+      /when.*start/,
+      /available.*start/,
+      /available to begin/,
+      /begin employment/,
+      /anticipated start/,
+      /earliest available/
+    ]) &&
+    // "(Month/Year)" format hints must not trip the month/year exclusions,
+    // which exist for the separate "Start date month"/"Start date year" fields.
+    !includesAny(label, [
+      /start date month/,
+      /start date year/,
+      /school/,
+      /university/,
+      /college/,
+      /education/,
+      /semester/
+    ])
   ) {
+    const fromProfile = preferredEarliestStart(profile, label);
+    if (fromProfile) {
+      return {
+        answer: fromProfile,
+        source: "rule",
+        reason: "start_date_profile"
+      };
+    }
     return {
       answer: "Immediately",
       source: "rule",
@@ -660,6 +984,40 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
     }
   }
 
+  // The address group. Order matters: the combined form mentions street,
+  // city, state, and zip in one label, so it must win before any of them.
+  if (includesAny(normalized, [/(enter your|full|complete|mailing|current) address/, /address \(street/, /^address$/])) {
+    const fullAddress = preferredFullAddress(profile);
+    if (fullAddress) {
+      return { answer: fullAddress, source: "profile", reason: "full_address" };
+    }
+  }
+
+  if (includesAny(normalized, [/\(city,? ?state\)/, /city and state/, /city\/state/])) {
+    const based = preferredBasedLocation(profile);
+    if (based) {
+      return { answer: based, source: "profile", reason: "city_state_location" };
+    }
+  }
+
+  if (includesAny(normalized, [/street address/])) {
+    const street = preferredStreetAddress(profile);
+    if (street) {
+      return { answer: street, source: "profile", reason: "street_address" };
+    }
+  }
+
+  if (
+    includesAny(normalized, [/\bcity\b/]) &&
+    !includesAny(normalized, [/state/, /zip/, /country/, /address/, /located/, /location/, /commut/])
+  ) {
+    // A bare "City" field takes the city alone, never "City, State".
+    const city = preferredCity(profile);
+    if (city) {
+      return { answer: city, source: "profile", reason: "city" };
+    }
+  }
+
   if (includesAny(normalized, [/zip/, /postal/, /post code/, /postcode/])) {
     const postal = preferredPostalCode(profile);
     if (postal) {
@@ -717,8 +1075,17 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
     };
   }
 
-  if (includesAny(normalized, [/preferred first name/, /first name if different/, /if different than the name you entered above/])) {
-    const customPreferredName = findCustomAnswer(profile, [/preferred first name/, /first name/]);
+  if (
+    includesAny(normalized, [
+      /preferred first name/,
+      /preferred name/,
+      /first name if different/,
+      /if different than the name you entered above/,
+      /like us to call you/,
+      /should we call you/
+    ])
+  ) {
+    const customPreferredName = findCustomAnswer(profile, [/preferred ?name/, /preferred first name/, /first name/]);
     if (typeof customPreferredName === "string" && customPreferredName.trim()) {
       return {
         answer: customPreferredName.trim(),
@@ -746,15 +1113,54 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
     }
   }
 
+  // The profile only records college education, and a college date or the
+  // school name is the wrong answer for anything about high school.
+  if (includesAny(normalized, [/high school/]) && includesAny(normalized, [/graduat/])) {
+    const customHighSchool = findCustomAnswer(profile, [/high school/]);
+    if (customHighSchool !== undefined) {
+      return {
+        answer: normalizeCustomValue(customHighSchool),
+        source: "profile",
+        reason: "high_school_graduation_custom"
+      };
+    }
+    return {};
+  }
+
   const looksLikeSchoolField =
     includesAny(normalized, [/school/, /university/, /college/]) &&
-    !includesAny(normalized, [/rising senior/, /recent college graduate/, /college graduate/, /graduat(ing|e)/, /year in school/]);
+    !includesAny(normalized, [
+      /rising senior/,
+      /recent college graduate/,
+      /college graduate/,
+      /graduat/,
+      /year in school/,
+      /\bmajor\b/,
+      /\bminor\b/,
+      /\bdegree\b/,
+      /\bgpa\b/,
+      /start date/,
+      /started/,
+      /high school/
+    ]);
   if (looksLikeSchoolField && (profile.education?.school || profile.education?.university)) {
     return {
       answer: profile.education?.school ?? profile.education?.university ?? null,
       source: "profile",
       reason: "education_school"
     };
+  }
+
+  if (includesAny(normalized, [/\bminor\b/])) {
+    const customMinor = findCustomAnswer(profile, [/\bminor\b/]);
+    if (customMinor !== undefined) {
+      return {
+        answer: normalizeCustomValue(customMinor),
+        source: "profile",
+        reason: "education_minor_custom"
+      };
+    }
+    return {};
   }
 
   if (includesAny(normalized, [/start date year/, /education start year/]) && profile.education?.startYear) {
@@ -773,23 +1179,49 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
     };
   }
 
-  if (includesAny(normalized, [/\bdegree\b/]) && (profile.education?.highestDegree || profile.education?.degree)) {
+  if (
+    includesAny(normalized, [
+      /(start date|started).*(school|university|college|education)/,
+      /(school|university|college|education).*start date/
+    ]) &&
+    profile.education?.startYear
+  ) {
+    const startDate = formatEducationStart(profile, normalized);
+    if (startDate) {
+      return { answer: startDate, source: "profile", reason: "education_start_date" };
+    }
+  }
+
+  if (
+    includesAny(normalized, [/\bdegree\b/]) &&
+    !includesAny(normalized, [/graduat/]) &&
+    (profile.education?.highestDegree || profile.education?.degree)
+  ) {
+    const degreeText = profile.education?.highestDegree ?? profile.education?.degree;
+    const option = pickDegreeLevelOption(question.options, degreeText);
+    if (option) {
+      return { answer: option, source: "profile", reason: "education_degree" };
+    }
     return {
-      answer: profile.education?.highestDegree ?? profile.education?.degree ?? null,
+      answer: degreeText ?? null,
       source: "profile",
       reason: "education_degree"
     };
   }
 
-  if (includesAny(normalized, [/discipline/, /major/, /field of study/]) && profile.education?.field) {
+  if (includesAny(normalized, [/discipline/, /major/, /field of study/]) && (profile.education?.field || profile.education?.discipline)) {
     return {
-      answer: profile.education.field,
+      answer: profile.education?.field ?? profile.education?.discipline ?? null,
       source: "profile",
       reason: "education_field"
     };
   }
 
-  if (includesAny(normalized, [/end date year/, /graduation year/, /grad year/]) && (profile.education?.endYear || profile.education?.graduationYear)) {
+  if (
+    includesAny(normalized, [/end date year/, /graduation year/, /grad year/]) &&
+    !includesAny(normalized, [/high school/]) &&
+    (profile.education?.endYear || profile.education?.graduationYear)
+  ) {
     return {
       answer: profile.education.endYear ?? profile.education.graduationYear ?? null,
       source: "profile",
@@ -813,7 +1245,16 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
     };
   }
 
-  if (includesAny(normalized, [/graduation date/, /expected graduation date/, /when is your graduation date/, /when do you graduate/])) {
+  if (
+    includesAny(normalized, [
+      /graduation date/,
+      /expected graduation date/,
+      /when is your graduation date/,
+      /when do you graduate/,
+      /intended graduation/,
+      /expected graduation/
+    ])
+  ) {
     const graduationDate = normalizeGraduationDateProfileValue(profile.education);
     if (/mm\/dd\/yyyy|month\/day\/year/.test(normalized) && graduationDate.mmDdYyyy) {
       return {
@@ -829,14 +1270,36 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
         reason: "education_graduation_date_mm_yyyy"
       };
     }
+    // No format hint: answer "May 2027" style, never a term range.
+    const month = profile.education?.endMonth?.trim();
+    const year = profile.education?.endYear ?? profile.education?.graduationYear;
+    if (year) {
+      return {
+        answer: month ? `${month} ${year}` : String(year),
+        source: "profile",
+        reason: "education_graduation_date"
+      };
+    }
   }
 
-  if (includesAny(normalized, [/when do you graduate/, /graduation term/, /expected graduation/]) && profile.education?.graduationYear) {
+  if (includesAny(normalized, [/graduation term/, /which term/]) && profile.education?.graduationYear) {
     return {
       answer: `May - Aug ${profile.education.graduationYear}`,
       source: "profile",
       reason: "education_graduation_term"
     };
+  }
+
+  if (includesAny(normalized, [/semester/])) {
+    const customSemesters = findCustomAnswer(profile, [/semester/]);
+    if (customSemesters !== undefined) {
+      return {
+        answer: normalizeCustomValue(customSemesters),
+        source: "profile",
+        reason: "semesters_available_custom"
+      };
+    }
+    return {};
   }
 
   if (includesAny(normalized, [/\bcountry\b/]) && !includesAny(normalized, [/country code/, /dial code/]) && profile.country) {
@@ -845,14 +1308,16 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
 
   if (
     includesAny(normalized, [/state/, /province/]) &&
-    !includesAny(normalized, [/citizenship/, /citizen/, /nationality/, /permanent residence/, /member state/, /eu/, /european union/]) &&
-    profile.state
+    !includesAny(normalized, [/citizenship/, /citizen/, /nationality/, /permanent residence/, /member state/, /eu/, /european union/, /united states/])
   ) {
-    return { answer: profile.state, source: "profile", reason: "state" };
+    const state = preferredState(profile);
+    if (state) {
+      return { answer: state, source: "profile", reason: "state" };
+    }
   }
 
   if (
-    includesAny(normalized, [/where are you/, /current location/, /currently based/, /\bbased in\b/, /location \(city\)/, /\bcity\b/]) &&
+    includesAny(normalized, [/where are you/, /current location/, /currently based/, /\bbased in\b/, /location \(city\)/, /commuting from/, /\bcity\b/]) &&
     !includesAny(normalized, [/export control/, /citizenship/, /nationality/, /permanent residence/])
   ) {
     const based = preferredBasedLocation(profile);
@@ -893,10 +1358,6 @@ export function evaluateProfileMapping(question: ApplicationQuestion, profile: C
 
   if (normalized.includes("highest degree") && profile.education?.highestDegree) {
     return { answer: profile.education.highestDegree, source: "profile", reason: "highest_degree" };
-  }
-
-  if ((normalized.includes("mailing address") || normalized.includes("current address") || normalized === "address") && profile.basics.location) {
-    return { answer: profile.basics.location, source: "profile", reason: "address_from_location" };
   }
 
   return {};

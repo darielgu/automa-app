@@ -1,169 +1,437 @@
 /*
  * The download page.
  *
- * Text-first on purpose: this page exists to hand over a DMG and explain the
- * one Gatekeeper step that follows. No web fonts, no scripts, no external
- * requests of any kind -- the same promise the app itself makes.
+ * One column, left-aligned, dark by default. No web fonts and no external
+ * requests of any kind -- the same promise the app itself makes. The only
+ * script on the page flips the theme and closes the download menu.
  */
 
 :root {
-  --ink: #14161a;
-  --muted: #5c626e;
-  --line: #e2e4e9;
-  --paper: #fdfdfc;
-  --accent: #14161a;
+  --bg: #ffffff;
+  --ink: #111111;
+  --muted: #666666;
+  --line: #e5e5e5;
+  --btn-bg: #111111;
+  --btn-ink: #ffffff;
+  --menu-bg: #ffffff;
+  --hover: #f3f3f3;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #ecedf0;
-    --muted: #9aa0ac;
-    --line: #2b2e35;
-    --paper: #131519;
-    --accent: #ecedf0;
+  :root:not([data-theme="light"]) {
+    --bg: #000000;
+    --ink: #ffffff;
+    --muted: #a3a3a3;
+    --line: #2a2a2a;
+    --btn-bg: #ffffff;
+    --btn-ink: #000000;
+    --menu-bg: #0f0f0f;
+    --hover: #1a1a1a;
+    color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #000000;
+  --ink: #ffffff;
+  --muted: #a3a3a3;
+  --line: #2a2a2a;
+  --btn-bg: #ffffff;
+  --btn-ink: #000000;
+  --menu-bg: #0f0f0f;
+  --hover: #1a1a1a;
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  background: var(--paper);
+  background: var(--bg);
   color: var(--ink);
-  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font: 18px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
 }
 
-.wrap {
-  max-width: 42rem;
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+p a,
+li a,
+footer a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--muted);
+}
+
+.icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  padding: 1rem 1.25rem;
+}
+
+.topbar-inner {
+  max-width: 62rem;
   margin: 0 auto;
-  padding: 4rem 1.25rem 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.nav {
+  display: flex;
+  gap: 1.35rem;
+  font-size: 1.05rem;
+  color: var(--muted);
+}
+
+.nav a:hover {
+  color: var(--ink);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.gh-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.gh-link .icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.gh-link:hover {
+  color: var(--ink);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.theme-toggle .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+}
+
+/* Show the sun in dark mode and the moon in light mode. */
+.theme-toggle .moon { display: none; }
+.theme-toggle .sun { display: block; }
+:root[data-theme="light"] .theme-toggle .moon { display: block; }
+:root[data-theme="light"] .theme-toggle .sun { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .theme-toggle .moon { display: block; }
+  :root:not([data-theme="dark"]) .theme-toggle .sun { display: none; }
+}
+
+/* ---------- content column ---------- */
+
+.wrap {
+  max-width: 55rem;
+  margin: 0 auto;
+  padding: 7rem 1.25rem 5rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 3.5rem;
+}
+
+.app-icon {
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: 0.9rem;
+  box-shadow: 0 0 0 1px var(--line);
 }
 
 h1 {
-  margin: 0 0 1.25rem;
-  font-size: 1.6rem;
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
-h2 {
-  margin: 3rem 0 0.85rem;
-  padding-top: 1.6rem;
-  border-top: 1px solid var(--line);
-  font-size: 1.05rem;
+.tagline {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 400;
   letter-spacing: -0.01em;
 }
 
-p {
-  margin: 0 0 1rem;
-}
-
 .lede {
+  margin: 0 0 1.75rem;
+  max-width: 48rem;
+  font-size: 1.25rem;
+  line-height: 1.55;
   color: var(--muted);
 }
 
 .note {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
-a {
-  color: var(--accent);
-  text-underline-offset: 2px;
+.label {
+  margin: 2.5rem 0 0.75rem;
+  font-size: 0.95rem;
+  color: var(--muted);
 }
 
-a:hover {
-  text-decoration-thickness: 2px;
-}
+/* ---------- buttons ---------- */
 
-ul,
-ol {
-  margin: 0 0 1rem;
-  padding-left: 1.2rem;
-}
-
-li {
-  margin-bottom: 0.5rem;
-}
-
-/* Both builds are named and neither is chosen for you. */
-.downloads {
-  margin: 0 0 1rem;
-  padding: 0;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
   list-style: none;
 }
 
-.downloads li {
-  margin-bottom: 0.85rem;
+.btn::-webkit-details-marker {
+  display: none;
 }
 
-.downloads a {
-  font-weight: 600;
+.btn-solid {
+  background: var(--btn-bg);
+  color: var(--btn-ink);
 }
 
-.downloads .note {
+.btn-outline {
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 0 1.5rem;
+  gap: 0.6rem;
+}
+
+.btn-outline:hover {
+  background: var(--hover);
+}
+
+.btn-lg {
+  height: 3.5rem;
+  font-size: 1.2rem;
+}
+
+.btn-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 100%;
+  padding: 0 1.25rem 0 1.5rem;
+  color: inherit;
+}
+
+.btn-lg .btn-main .icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 1rem 0 0.75rem;
+  border-left: 1px solid rgba(128, 128, 128, 0.35);
+}
+
+.chevron::after {
+  content: "";
+  width: 0.45em;
+  height: 0.45em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-25%) rotate(45deg);
+  opacity: 0.7;
+}
+
+.cta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+}
+
+/* The download control: a details element, so it works without a script. */
+.dl {
+  position: relative;
+}
+
+.dl-small .btn {
+  height: 2.25rem;
+  font-size: 0.95rem;
+}
+
+.dl-small .btn-main {
+  padding: 0 0.7rem 0 1rem;
+  gap: 0.45rem;
+}
+
+.dl-small .chevron {
+  padding: 0 0.7rem 0 0.5rem;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 10;
+  min-width: 20rem;
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--menu-bg);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.dl-small .menu {
+  left: auto;
+  right: 0;
+}
+
+.menu a {
   display: block;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.6rem;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.menu a:hover {
+  background: var(--hover);
+}
+
+.menu small {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------- features ---------- */
+
+.features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+}
+
+.features li {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.features li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+}
+
+.features strong {
+  font-weight: 500;
+  color: var(--ink);
 }
 
 code {
-  padding: 0.1rem 0.3rem;
+  padding: 0.1rem 0.35rem;
   border: 1px solid var(--line);
+  border-radius: 0.3rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85em;
   word-break: break-all;
 }
 
-table {
-  width: 100%;
-  margin: 0 0 1rem;
-  border-collapse: collapse;
-  font-size: 0.92rem;
-}
-
-th,
-td {
-  padding: 0.55rem 0.6rem 0.55rem 0;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-
-th {
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 500;
-}
+/* ---------- screenshot and footer ---------- */
 
 figure {
-  margin: 0 0 1rem;
+  margin: 3.5rem 0 0;
 }
 
-/* width and height are set on the element too, so the space is reserved before
-   the file arrives and the text below it does not jump. */
 img {
+  max-width: 100%;
+}
+
+figure img {
   display: block;
   width: 100%;
   height: auto;
   border: 1px solid var(--line);
+  border-radius: 0.75rem;
 }
 
 figcaption {
-  margin-top: 0.5rem;
+  margin-top: 0.6rem;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 footer {
-  margin-top: 3rem;
-  padding-top: 1.6rem;
+  margin-top: 4rem;
+  padding-top: 1.5rem;
   border-top: 1px solid var(--line);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  color: var(--muted);
 }
 
 footer p {
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .nav {
+    display: none;
+  }
+  .wrap {
+    padding-top: 3.5rem;
+  }
+  .brand {
+    margin-bottom: 2.5rem;
+  }
+  .btn-lg {
+    height: 3.1rem;
+    font-size: 1.05rem;
+  }
 }
